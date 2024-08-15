@@ -35,6 +35,12 @@ SEPatchTbl:
             dc.w    PatchDrawBeepScreen-PtchROMBase
 PlusPatchTbl:
             dc.w    $400094-BaseOfROM
+            dc.w    PatchPlusBoot-PtchROMBase
+            dc.w    $4001F8-BaseOfROM
+            dc.w    PatchClkNoMem-PtchROMBase
+            dc.w    $4000CE-BaseOfROM
+            dc.w    PatchPlusBoot2-PtchROMBase
+            dc.w    $4003A8-BaseOfROM 
             org     $F80080
             dc.l    TROMCode
             dc.l    WarmEntry
@@ -42,17 +48,17 @@ PlusPatchTbl:
             dc.b    '1','.','3','b','2'
             dc.b    0,0,1,3
 NewTraceVector:
-            move.w  D0,-(SP)
-            move.w  ExpectedPC,D0
-            cmp.w   ($6,SP),D1
-            beq.b   .L2
+            move.w  D0,-(SP)                        ; Save D0
+            move.w  ExpectedPC,D0                   ; Get address of next patch location
+            cmp.w   ($6,SP),D0                      ; Compare against Program Counter from exception
+            beq.b   .PatchROM                       ; If it matches this a location to patch
 .ExitException:
-            move.w  (SP)+,D0
-            rte
-.L2:
+            move.w  (SP)+,D0                        ; Restore D0
+            rte                                     ; Go back to ROM code
+.PatchROM:
             cmpi.w  #$40,($4,SP)                    ; Ensure we are in the right ROM space ($40xxxx)
             bne.b   .ExitException
-            move.w  (SP)+,D0
+            move.w  (SP)+,D0                        ; Restore D0
             move.l  A0,(-$8,SP)                     ; Save A0
             movea.l PtchTblBase,A0                  ; Load the patch location base
             adda.w  PatchOffset,A0                  ; Add the offset to the current patch
@@ -84,3 +90,9 @@ PatchInitADB:
 PatchInitIOMgr:
 PatchInitIOMgr2:
 PatchDrawBeepScreen:
+PatchPlusBoot:
+PatchClkNoMem:
+PatchPlusBoot2:
+PatchCPUFlag:
+PatchGNEFilter:
+PatchPlusInitIOMgr:
