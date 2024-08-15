@@ -54,12 +54,12 @@ PlusPatchTbl:
             dc.w    PatchInitIOMgr-PtchROMBase
             dc.w    $4008A2-BaseOfROM
             dc.w    PatchInitIOMgr2-PtchROMBase
-            
+
             org     $F80080
             dc.l    TROMCode
             dc.l    WarmEntry
             dc.b    5
-            dc.b    '1','.','3','b','2'
+            dc.b    '1','.','3','b','2'             ; ROM version string
             dc.b    0,0,1,3
 NewTraceVector:
             move.w  D0,-(SP)                        ; Save D0
@@ -84,7 +84,7 @@ NewTraceVector:
             movea.l (-$4,SP),A0                     ; Restore A0
             rts
 ColdEntry:
-            lea     $E7E1FE,A0
+            lea     OutboundVIA,A0
             moveq   #-$60,D0
             or.b    D0,($400,A0)
             or.b    D0,($0,A0)
@@ -110,15 +110,15 @@ ColdEntry:
             movea.l #OutboundDisp+32768,SP
             clr.w   OutboundCfg
             cmpa.l  #$400062,A1                     ; Mac Plus return address in A1?
-            bne.b   .IsSE
+            bne.b   .IsSE                           ; No, must be a Mac SE
             move.l  #$FE000,$707D00
             addq.l  #4,A1                           ; Skip past setting the Status Register in the Plus ROM
-            movea.l #PlusPatchTbl,A6
+            movea.l #PlusPatchTbl,A6                ; Load the Plus patch table
             bra.b   .LoadFirstPatchLocation
 .IsSE:
             bset.b  #IsMacSEROM,OutboundCfg
-            movea.l #$401C04,A1
-            movea.l #SEPatchTbl,A6
+            movea.l #$401C04,A1                     ; Set the return address (SE ROM does not do this for some reason)
+            movea.l #SEPatchTbl,A6                  ; Load the SE patch table
 .LoadFirstPatchLocation:
             move.w  (A6)+,ExpectedPC
             move.w  (A6)+,PatchOffset
@@ -126,7 +126,7 @@ ColdEntry:
             move.l  #PtchROMBase,PtchTblBase
             move.w  BaseOfROM,D0
             bsr.w   RamSizing
-            btst.b  #3,$E7E1FE
+            btst.b  #3,OutboundVIA
             beq.b   .L7
             movea.l #$580800,A0
             movep.w ($0,A0),D0
@@ -142,17 +142,17 @@ ColdEntry:
             bclr.b  #CfgBit7,OutboundCfg
             ori.b   #1<<CfgBit3|1<<CfgBit1,OutboundCfg
             move.l  #300000,D0
-.L3:
+.DelayLoop2:
             subq.w  #1,D0
-            bne.b   .L3
+            bne.b   .DelayLoop2
             move.b  #1,$500009
             clr.w   SCSIBase
             moveq   #-1,D1
-            move.w  #512*342/8/4-1,D0
+            move.w  #512*342/8/4-1,D0               ; Size of the Macintosh CRT
             movea.l #ScreenLow,A0
-.L4:
+.ClearScreenLoop2:
             move.l  D1,(A0)+
-            dbf     D0,.L4
+            dbf     D0,.ClearScreenLoop2
             lea     SCSIBase,A0
 
             
