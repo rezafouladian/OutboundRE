@@ -146,14 +146,14 @@ ColdEntry:
             subq.w  #1,D0
             bne.b   .DelayLoop2
             move.b  #1,$500009
-            clr.w   SCSIBase
+            clr.w   SCSI_Base
             moveq   #-1,D1
             move.w  #512*342/8/4-1,D0               ; Size of the Macintosh CRT
             movea.l #ScreenLow,A0
 .ClearScreenLoop2:
             move.l  D1,(A0)+
             dbf     D0,.ClearScreenLoop2
-            lea     SCSIBase,A0
+            lea     SCSI_Base,A0
             move.b  (sICR,A0),D0
             or.b    (sCSR,A0),D0
             andi.b   #%10000000,D0
@@ -428,6 +428,7 @@ RamMirrorCheck:
 .FailExit:
             moveq   #0,D0
             rts
+DrawWallaby:
 
 
 
