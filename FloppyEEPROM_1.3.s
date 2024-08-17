@@ -59,9 +59,11 @@ PlusPatchTbl:
             dc.l    TROMCode
             dc.l    WarmEntry
             dc.b    5                               ; Length byte
-            dc.b    "1.3b2"                        ; ROM version string
+            dc.b    "1.3b2"                         ; ROM version string
             dc.b    0,0,1,3
-NewTraceVector:
+; Called once every instruction while trace bit is set.
+; Checks the current Program Counter to see if it an address to patch.
+PatchException:
             move.w  D0,-(SP)                        ; Save D0
             move.w  ExpectedPC,D0                   ; Get address of next patch location
             cmp.w   ($6,SP),D0                      ; Compare against Program Counter from exception
@@ -169,7 +171,7 @@ ColdEntry:
             clr.b   SCSI_ICRwrite
 .L7:
             movea.l $707D00,SP
-            move.l  #NewTraceVector,TraceVector
+            move.l  #PatchException,TraceVector
             bset.b  #CfgBit5,OutboundCfg
             move    1<<TraceBit|1<<Supervisor|1<<InterruptBit2|1<<InterruptBit1|1<<InterruptBit0,SR
             jmp     (A1)
@@ -278,7 +280,7 @@ PatchMinorStartTest2:
             jmp     $4026F0
 PatchMinorStartTest6:
             addq.w  #8,(4,SP)
-            move.l  #NewTraceVector,TraceVector
+            move.l  #PatchException,TraceVector
             btst.b  #CfgBit3,OutboundCfg
             beq.b   .Exit
             move.w  $402602-BaseOfROM,ExpectedPC
@@ -289,7 +291,7 @@ PatchMinorStartTest6:
 PatchLoadExceptionVectors:
             move.l  (A0)+,(A1)+
             dbf     D0,PatchLoadExceptionVectors
-            move.l  #NewTraceVector,TraceVector
+            move.l  #PatchException,TraceVector
             rte
 InitPatch:
             move.w  #$5C,(4,SP)
@@ -326,7 +328,7 @@ PatchClkNoMem:
             move.w  #$252,(4,SP)
             rte
 WarmEntry:
-            move.l  #NewTraceVector,TraceVector
+            move.l  #PatchException,TraceVector
             move    1<<TraceBit|1<<Supervisor|1<<InterruptBit2|1<<InterruptBit1|1<<InterruptBit0,SR
             btst.b  #IsMacSEROM,OutboundCfg
             beq.b   .L2
@@ -362,7 +364,7 @@ PatchBootRetry:
             dbf     D0,.CopyLoop
             move.l  A1,$707D00
             movea.l PtchTblBase,A0
-            adda.w  #NewTraceVector-PtchROMBase,A0
+            adda.w  #PatchException-PtchROMBase,A0
             move.l  A0,TraceVector
             move.l  #$4940,D0
 .L3:
@@ -372,16 +374,219 @@ PatchBootRetry:
             movem.l (SP)+,D0/A0-A1
             rte
 PatchCPUFlag:
+            pea     PatchExceptionUnknown
+            move.l  (SP)+,Lev1AutoVector
+            move.w  #$59A,(4,SP)
+            bset.b  #CfgBit5,OutboundCfg
+            rte
 PatchGetPRAM:
+            bset.b  #CfgBit5,OutboundCfg
+            btst.b  #CfgBit3,OutboundCfg
+            bne.b   .L1
+            bsr.w   ReplaceTraps
+.L1:
+            move.l  A0,-(SP)
+            movea.l $707D00,A0
+            adda.w  #$D2,A0
+            move.l  LineAVector,-(A0)
+            move.w  #$4EF9,-(A0)
+            move.l  #$7C8000,-(A0)
+            move.l  A0,LineAVector
+            movea.l (SP)+,A0
+            rte
 PatchSetupSysAppZone:
+            lea     SysAppZonePatch,A0
+            rte
 PatchInitADB:
+            bset.b  #2,($15D,A3)
+            lea     ($C0,A3),A0
+            move.l  A0,($13C,A3)
+            move.l  A0,($144,A3)
+            move.l  A0,($148,A3)
+            lea     ($130,A3),A0
+            move.l  A0,($140,A3)
+            lea     ($164,A3),A0
+            move.l  A0,($130,A3)
+            move.l  #$40339C,($134,A3)
+            move.w  #$3366,(4,SP)
+            rte
 PatchGNEFilter:
+            lea     GNEFilterPatch,A0
+            rte
+GNEFilterPatch:
+            dc.w    $0,$9D40,$3,$2740,$20,$0,$0
+SysAppZonePatch:
+            dc.w    $0,$9F40,$3,$2940,$40,$0,$0
 PatchPlusInitIOMgr:
             moveq #$40,D0
             rte
 PatchInitIOMgr:
+            btst.b  #IsMacSEROM,OutboundCfg
+            bne.b   .L3
+            bset.b  #(1<<hwCbClock)>>8,HWCfgFlags
+            btst.b  #CfgBit3,OutboundCfg
+            beq.b   .L1
+            pea     PatchInitIOMgr3
+            move.l  (SP)+,Lvl1DT+8
+            bra.b   .L3
+.L1:
+            cmpi.b  #$67,$407D44                    ; Check for v1 Mac Plus ROM
+            bne.b   .L2
+            move.b  #(1<<hwCbSCSI)>>8,HWCfgFlags
+.L2:
+            bsr.w   PatchInitIOMgr4
+.L3:
+            btst.b  #CfgBit3,OutboundCfg
+            bne.b   .L5
+            addi.w  #$A,(4,SP)
+            movem.l A1-A0/D2-D0,-(SP)
+            movea.l LineAVector,A0
+            move.l  A0,-(SP)
+            move.l  (6,A0),LineAVector
+            move.l  #$310,D0
+            btst.b  #IsMacSEROM,OutboundCfg
+            beq.b   .L4
+            addi.l  #$34,D0
+.L4:
+            _NewPtrSysClear
+            move.l  A0,SonyVars
+            lea     ($118,A0),A0
+            _InsTime
+            move.l  (SP)+,LineAVector
+            movem.l (SP)+,D0-D2/A0-A1
+.L5:
+            btst.b  #CfgBit2,OutboundCfg
+            bne.b   .Exit
+            bset.b  #(1<<hwCbSCSI)>>8,HWCfgFlags
+            pea     .PatchInitIOMgr5
+            move.l  (SP)+,$E54
+.Exit:
+            ori     #1<<TraceBit,SR
+            rte
 PatchBootRetry2:
+            addq.w  #4,(4,SP)
+            move.w  #$A000,(SP)
+            btst.b  #CfgBit3,OutboundCfg
+            beq.b   .Exit
+            addq.w  #4,(4,SP)
+            move    #1<<Supervisor,SR
+            jsr     $403306
+            move.w  $400786-BaseOfROM,ExpectedPC
+            move.w  PatchInitIOMgr,PatchOffset
+            addq.l  #4,PatchTblPtr
+.Exit:
+            rte
+.PatchInitIOMgr5:
+            movea.l (SP)+,A0
+            move.w  (SP)+,D0
+            moveq   #0,D1
+            cmpi.w  #0,D0
+            beq.b   .L1
+            cmpi.w  #1,D0
+            beq.b   .L1
+            cmpi.w  #10,D0
+            beq.b   .L1
+            moveq   #2,D1
+            cmpi.w  #2,D0
+            beq.b   .L1
+            moveq   #6,D1
+            cmpi.w  #3,D0
+            beq.b   .L1
+            moveq   #12,D1
+            cmpi.w  #9,D0
+            beq.b   .L1
+            moveq   #4,D1
+            cmpi.w  #4,D0
+            beq.b   .L1
+            cmpi.w  #5,D0
+            beq.b   .L1
+            cmpi.w  #6,D0
+            beq.b   .L1
+            cmpi.w  #8,D0
+            beq.b   .L1
+            moveq   #0,D1
+            adda.l  D1,SP
+            moveq   #0,D0
+            move.w  D0,(SP)
+            jmp     (A0)
+.L1:
+            adda.l  D1,SP
+            moveq   #2,D0
+            move.w  D0,(SP)
+            jmp     (A0)
+PatchInitIOMgr3:
+            btst.b  #4,($1600,A1)
+            bne.b   .L1
+            jmp     $40260E
+.L1:
+            move.b  #4,($1A00,A1)
+            move.w  #$190,D0
+            jmp     $4025FE
 PatchInitIOMgr2:
+            andi.w  #$7FFF,(SP)
+            movem.l A1-A0/D2-D0,-(SP)
+            movea.l LineAVector,A0
+            move.l  A0,-(A0)
+            move.l  ($6,A0),LineAVector
+            movea.l #$CC0010,A0
+            lea     (-$8,A0),A1
+            moveq   #-128,D0
+            moveq   #0,D1
+
+.L1:
+            subq.l  #1,D1
+            beq.b   .L2
+            btst.b  D0,(A0)
+            beq.b   .L1
+            bset.b  #0,$707D09
+            bsr.w   Super_Install
+.L2:
+            bsr.w   RamDisk_Install
+            move.l  #10000000,D0                    ; Set loop counter
+.WaitLoop:
+            cmpi.b  #-$80,$C00005
+            bne.b   .L3
+            subq.l  #1,D0                           ; Decrement loop counter
+            bne.b   .WaitLoop
+.L3:
+            moveq   #10,D0                          ; Set loop counter
+.L4:
+            moveq   #-$13,D1
+            and.b   $C00005,D1
+            cmpi.b  #$40,D1
+            beq.b   .L5
+            subq.l  #1,D0
+            bne.b   .L4
+            bra.b   .L6
+.L5:
+            bset.b  #1,$707D09
+.L6:
+            move.l  (SP)+,LineAVector
+            lea     VBase,A0
+            move.b  #1<<ifT2,(vIFR,A0)
+            btst.b  #IsMacSEROM,OutboundCfg
+            beq.b   .PlusRestoreVector
+            btst.b  #CfgBit3,OutboundCfg
+            bne.b   .SERestoreVector
+            ori.w   #1<<15,(4,SP)
+            bra.b   .Exit
+.SERestoreVector:
+            move.l  $40137A,TraceVector             ; Restore original Mac SE trace vector
+.L8:
+            bsr.b   PatchInitIOMgr6
+.Exit:
+            movem.l (SP)+,D0-D2/A0-A1
+            rte
+.PlusRestoreVector:
+            move.l  $401136,TraceVector             ; Restore original Mac Plus trace vector
+            bra.b   .L8
+PatchInitIOMgr6:
+            movea.l LineAVector,A0
+            movea.l ($6,A0),A0
+            move.l  A0,$707D14
+            lea     PatchInitIOMgr7,A0
+            move.l  A0,LineAVector
+            rts
 PatchDrawBeepScreen:
 RamSizing:
             suba.l  A0,A0
@@ -428,6 +633,9 @@ RamMirrorCheck:
 .FailExit:
             moveq   #0,D0
             rts
+PatchExceptionUnknown:
+            movem.l A3-A0/D3-D0,-(SP)
+            jmp     $401A60
 DrawWallaby:
             lea     .WallabyBitmap,A0
             movea.l #OutboundDisp+9335,A4
