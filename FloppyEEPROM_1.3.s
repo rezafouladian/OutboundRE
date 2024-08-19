@@ -129,7 +129,7 @@ ColdEntry:
             move.w  BaseOfROM,D0
             bsr.w   RamSizing
             btst.b  #3,OutboundVIA
-            beq.b   .L7
+            beq.w   .L7
             movea.l #$580800,A0
             movep.w ($0,A0),D0
             cmpi.w  #$55AA,D0
@@ -458,7 +458,7 @@ PatchInitIOMgr:
             btst.b  #CfgBit2,OutboundCfg
             bne.b   .Exit
             bset.b  #(1<<hwCbSCSI)>>8,HWCfgFlags
-            pea     .PatchInitIOMgr5
+            pea     PatchBootRetry2\.PatchInitIOMgr5
             move.l  (SP)+,$E54
 .Exit:
             ori     #1<<TraceBit,SR
@@ -526,13 +526,23 @@ PatchInitIOMgr2:
             andi.w  #$7FFF,(SP)
             movem.l A1-A0/D2-D0,-(SP)
             movea.l LineAVector,A0
-            move.l  A0,-(A0)
-            move.l  ($6,A0),LineAVector
+            move.l  A0,-(SP)
+            move.l  ($6,A0),LineAVector             ; Skip the first instruction
             movea.l #$CC0010,A0
             lea     (-$8,A0),A1
             moveq   #-128,D0
             moveq   #0,D1
-
+            move.b  D0,(A0)
+            move.b  (A1),D2
+            move.b  D1,(A0)
+            move.b  (A1),D2
+            move.b  D1,(A1)
+            move.b  #$14,(A0)
+            movea.l #$C80018,A0
+            moveq   #7,D0
+            btst.b  D0,(A0)
+            bne.b   .L2
+            moveq   #30,D1
 .L1:
             subq.l  #1,D1
             beq.b   .L2
@@ -683,9 +693,16 @@ RAMDisk_Name:
             dc.b    ".RAMd"
 RAMDisk_Open:
 RAMDisk_Close:
+            clr.w   D0
+            rts
 RAMDisk_Prime:
 RAMDisk_Ctl:
 RAMDisk_Status:
+            move.w  #-$12,D0
+            cmpi.w  #8,($1A,A0)
+            bne.b   .L1
+            lea     ($1C,A0),A2
+.L1:
 Super_Install:
             movem.l A6-A0/D7-D0,-(SP)
             movea.l $707D00,A1
@@ -788,6 +805,7 @@ Super_Name:
             dc.b    0,0,0
 Super_UnknownData:
             ;incbin
+            
             dc.b    21                              ; Length byte
             dc.b    "Outbound Floppy Drive"
             dc.b    0,0
@@ -841,7 +859,7 @@ Super_Unknown7:
 Super_Unknown9:
             movem.l A6-A0/D7-D0,-(SP)
             lea     Super_UnknownData5,A0
-            lea     Super_UknownData,A1
+            lea     Super_UnknownData,A1
             movea.l A1,A2
             move.w  #255,D0
 .L1:
@@ -902,4 +920,20 @@ Super_Unknown12:
             movem.l (SP)+,D1-D2/A0
             unlk    A6
             rts
+Super_Unknown13:
+            link.w  A6,#0
+
+            
+;temp
+Super_Unknown1:
+Super_Unknown8:
+Super_UnknownData5:
+Super_Unknown11:
+Super_Unknown4:
+Super_Unknown3:
+Super_Unknown5:
+PatchInitIOMgr4:
+PatchInitIOMgr7:
+RamDisk_Install:
+ReplaceTraps:
 
