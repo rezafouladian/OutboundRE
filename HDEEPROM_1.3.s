@@ -62,3 +62,55 @@ PlusPatchTbl:
             dc.b    "1.3b2"                         ; ROM version string
             dc.b    0,0,1,3
 
+HDDriver_Close:
+            clr.w   ($10,A0)
+            clr.w   D0
+            rts
+HDDriver_Prime:
+            movem.l A6-A0/D7-D2,-(SP)
+            move.l  A1,-(SP)
+            move.l  A0,-(SP)
+            jsr     HDDriver_Unknown3
+.L1:
+            addq.l  #8,SP
+            movem.l (SP)+,D2-D7/A0-A6
+            move.w  D0,($10,A0)
+            move.w  ($6,A0),D0
+            btst.l  #9,D0
+            bne.b   .Exit
+            move.l  JIODone,-(SP)
+.Exit:
+            move.w  ($10,A0),D0
+            rts
+HDDriver_Ctl:
+            movem.l A6-A0/D7-D2,-(SP)
+            move.l  A1,-(SP)
+            move.l  A0,-(SP)
+            jsr     HDDriver_Unknown2
+            bra.b   HDDriver_Prime\.L1
+HDDriver_Status:
+            movem.l A6-A0/D7-D2,-(SP)
+            move.l  A1,-(SP)
+            move.l  A0,-(SP)
+            jsr     HDDriver_Unknown1
+            bra.b   HDDriver_Prime\.L1
+HDDriver:
+            dc.w    $4F00
+            dc.w    0
+            dc.w    0
+            dc.w    0
+            dc.w    HDDriver_Open-HDDriver
+            dc.w    HDDriver_Prime-HDDriver
+            dc.w    HDDriver_Ctl-HDDriver
+            dc.w    HDDriver_Status-HDDriver
+            dc.w    HDDriver_Close-HDDriver
+HDDriver_Name:
+            dc.b    5
+            dc.b    ".PTek"
+HDDriver_UnknownData1:
+            incbin  'HDDriver_UnknownData1.bin'
+HDDriver_UnknownData2:
+            incbin  'HDDriver_UnknownData2.bin'
+            dc.b    18
+            dc.b    "Outbound Hard Disk"
+            dc.b    0,0,0
