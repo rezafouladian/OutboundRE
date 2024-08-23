@@ -968,14 +968,12 @@ Super_Name:
             dc.b    ".Super"                        ; Driver name
             dc.b    0,0,0
 Super_UnknownData:
-            ;incbin
-            
+            incbin  'Super_UnknownData.bin'
             dc.b    21                              ; Length byte
             dc.b    "Outbound Floppy Drive"
             dc.b    0,0
 Super_UnknownData2:
-            ;incbin
-
+            incbin  'Super_UnknownData2.bin'
 Super_Unknown6:
             movem.l A6-A0/D7-D0,-(SP)
             movea.l #$B00003,A0
