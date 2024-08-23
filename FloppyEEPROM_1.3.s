@@ -43,7 +43,7 @@ PlusPatchTbl:
             dc.w    $4003A8-BaseOfROM 
             dc.w    PatchBootRetry-PtchROMBase
             dc.w    $400594-BaseOfROM
-            dc.w    PatchCPUFlag-PtchROMBase
+            dc.w    PatchWhichCPUPlus-PtchROMBase
             dc.w    $4005BC-BaseOfROM
             dc.w    PatchGetPRAM-PtchROMBase
             dc.w    $400972-BaseOfROM
@@ -96,7 +96,7 @@ ColdEntry:
 .ClearScreenLoop:
             move.l  D1,-(A0)
             dbf     D0,.ClearScreenLoop
-            move.l  SP,$707D00
+            move.l  SP,OutboundGlobals
             movea.l #OutboundDisp+32768,SP
             bsr.w   DrawWallaby
             move.l  #262144,D0
@@ -113,7 +113,7 @@ ColdEntry:
             clr.w   OutboundCfg
             cmpa.l  #$400062,A1                     ; Mac Plus return address in A1?
             bne.b   .IsSE                           ; No, must be a Mac SE
-            move.l  #$FE000,$707D00
+            move.l  #$FE000,OutboundGlobals
             addq.l  #4,A1                           ; Skip past setting the Status Register in the Plus ROM
             movea.l #PlusPatchTbl,A6                ; Load the Plus patch table
             bra.b   .LoadFirstPatchLocation
@@ -170,7 +170,7 @@ ColdEntry:
 .L6:
             clr.b   SCSI_ICRwrite
 .L7:
-            movea.l $707D00,SP
+            movea.l OutboundGlobals,SP
             move.l  #PatchException,TraceVector
             bset.b  #CfgBit5,OutboundCfg
             move    1<<TraceBit|1<<Supervisor|1<<InterruptBit2|1<<InterruptBit1|1<<InterruptBit0,SR
@@ -349,34 +349,35 @@ WarmEntry:
 .L3:
             jmp     $40037E
 PatchBootRetry:
-            addq.w  #4,(4,SP)
-            movem.l A1-A0/D0,-(SP)
+            addq.w  #4,(4,SP)                       ; Add 4 to the Program Counter
+            movem.l A1-A0/D0,-(SP)                  ; Save registers
             movea.l #PtchROMBase,A0
-            movea.w #$1400,A1
-            btst.b  #IsMacSEROM,OutboundCfg
-            beq.b   .L1
-            movea.w #$1600,A1
+            movea.w #$1400,A1                       ; HeapStart for Plus is $1400
+            btst.b  #IsMacSEROM,OutboundCfg         ; Is this an SE ROM
+            beq.b   .L1                             ; No, must be a Plus ROM
+            movea.w #$1600,A1                       ; HeapStart for SE is $1600
 .L1:
-            move.l  A1,(PtchTblBase)
-            move.l  #4095,D0
+; Copy the patch ROM into RAM
+            move.l  A1,PtchTblBase
+            move.l  #$4000/4-1,D0                   ; 16KB total to copy
 .CopyLoop:
-            move.l  (A0)+,(A1)
+            move.l  (A0)+,(A1)+
             dbf     D0,.CopyLoop
-            move.l  A1,$707D00
+            move.l  A1,OutboundGlobals
             movea.l PtchTblBase,A0
             adda.w  #PatchException-PtchROMBase,A0
-            move.l  A0,TraceVector
+            move.l  A0,TraceVector                  ; Point to the trace exception in RAM now
             move.l  #$4940,D0
 .L3:
-            clr.w   (A1)+
-            subq.l  #1,D0
+            clr.b   (A1)+
+            subq.l  #1,D0                           ; Decrement loop counter
             bne.b   .L3
-            movem.l (SP)+,D0/A0-A1
+            movem.l (SP)+,D0/A0-A1                  ; Restore registers
             rte
-PatchCPUFlag:
+PatchWhichCPUPlus:
             pea     PatchExceptionUnknown
             move.l  (SP)+,Lev1AutoVector
-            move.w  #$59A,(4,SP)
+            move.w  #$59A,(4,SP)                    ; Skip ahead
             bset.b  #CfgBit5,OutboundCfg
             rte
 PatchGetPRAM:
@@ -386,7 +387,7 @@ PatchGetPRAM:
             bsr.w   ReplaceTraps
 .L1:
             move.l  A0,-(SP)
-            movea.l $707D00,A0
+            movea.l OutboundGlobals,A0
             adda.w  #$D2,A0
             move.l  LineAVector,-(A0)
             move.w  #$4EF9,-(A0)
@@ -548,7 +549,7 @@ PatchInitIOMgr2:
             beq.b   .L2
             btst.b  D0,(A0)
             beq.b   .L1
-            bset.b  #0,$707D09
+            bset.b  #Cfg2Bit0,OutboundCfg2
             bsr.w   Super_Install
 .L2:
             bsr.w   RamDisk_Install
@@ -569,7 +570,7 @@ PatchInitIOMgr2:
             bne.b   .L4
             bra.b   .L6
 .L5:
-            bset.b  #1,$707D09
+            bset.b  #Cfg2Bit1,OutboundCfg2
 .L6:
             move.l  (SP)+,LineAVector
             lea     VBase,A0
@@ -583,21 +584,31 @@ PatchInitIOMgr2:
 .SERestoreVector:
             move.l  $40137A,TraceVector             ; Restore original Mac SE trace vector
 .L8:
-            bsr.b   PatchInitIOMgr6
+            bsr.b   InstallLineAPatch
 .Exit:
             movem.l (SP)+,D0-D2/A0-A1
             rte
 .PlusRestoreVector:
             move.l  $401136,TraceVector             ; Restore original Mac Plus trace vector
             bra.b   .L8
-PatchInitIOMgr6:
+InstallLineAPatch:
             movea.l LineAVector,A0
             movea.l ($6,A0),A0
             move.l  A0,$707D14
-            lea     PatchInitIOMgr7,A0
+            lea     PatchLineA,A0
             move.l  A0,LineAVector
             rts
 PatchDrawBeepScreen:
+            andi.w  #$7FFF,(SP)
+            movem.l A6-A0/D7-D1,-(SP)
+            bsr.b   InstallLineAPatch
+            bsr.w   PatchInitIOMgr4
+            bsr.w   PatchInitIOMgr8
+            move.l  #$40137A,TraceVector
+            move.w  HWCfgFlags,D0
+            bclr.l  #(1<<hwCbMMU|1<<hwCbAUX)>>8,D0
+            move.w  D0,HWCfgFlags
+
 RamSizing:
             suba.l  A0,A0
             move.b  #1,$50000B
@@ -678,6 +689,139 @@ DrawWallaby:
 .Return:
             rts
 .WallabyBitmap:
+Shared_Unknown1:
+Shared_Unknown2:
+Super_Unknown27:
+            move.l  D2,-(SP)
+            move.l  D0,D2
+            mulu.w  D1,D2
+            movea.l D2,A0
+            move.l  D1,D2
+            swap    D2
+            mulu.w  D0,D2
+            swap    D0
+            mulu.w  D0,D1
+            add.w   D1,D2
+            swap    D2
+            clr.w   D2
+            adda.l  D2,A0
+            move.l  A0,D0
+            move.l  (SP)+,D2
+            rts
+Super_Unknown26:
+            movem.l D4-D2,-(SP)
+            move.l  D1,D2
+            swap    D2
+            tst.w   D2
+            bne.b   .L2
+            move.w  D0,D3
+            clr.w   D0
+            swap    D0
+            beq.b   .L1
+            divu.w  D1,D0
+            move.w  D0,D2
+.L1:
+            swap    D2
+            move.w  D3,D0
+            divu.w  D1,D0
+            move.w  D0,D2
+            move.l  D2,D1
+            clr.w   D0
+            swap    D0
+            bra.b   .Exit
+.L2:
+            move.l  D0,D2
+            clr.w   D0
+            swap    D0
+            swap    D2
+            clr.w   D2
+            move.l  D1,D3
+            moveq   #0,D1
+            moveq   #15,D4
+.L3:
+            add.l   D2,D2
+            addx.l  D0,D0
+            add.l   D1,D1
+            cmp.l   D3,D0
+            bcs.b   .L4
+            sub.l   D3,D0
+            addq.b  #1,D1
+.L4:
+            dbf     D4,.L3
+.Exit:
+            movem.l (SP)+,D2-D4
+            rts
+Super_Unknown25:
+            jsr     Super_Unknown26
+            move.l  D1,D0
+            rts
+Super_Unknown24:
+            movea.l (SP)+,A1
+            movea.l (SP)+,A0
+            _VInstall
+            move.w  D0,(SP)
+            jmp     (A1)
+Super_Unknown23:
+            movea.l (SP)+,A1
+            move.l  (SP)+,D0
+            movea.w (SP)+,A0
+            _PostEvent
+            move.w  D0,(SP)
+            jmp     (A1)
+Super_Unknown22:
+            movea.l (SP)+,A1
+            movea.l (SP)+,A0
+            move.l  A1,-(SP)
+            _OffLine
+            move.w  D0,(4,SP)
+            rts
+Super_Unknown21:
+            movea.l (SP)+,A0
+            move.w  (SP)+,D0
+            addq.w  #1,D0
+            neg.w   D0
+            lsl.w   #2,D0
+            movea.l UTableBase,A1
+            move.l  (A1,D0),(SP)
+            jmp     (A0)
+Super_Unknown20:
+            move.l  (SP)+,D1
+            move.l  (SP)+,D0
+            movea.l (SP)+,A1
+            movea.l (SP)+,A0
+            _BlockMove
+            movea.l D1,A1
+            move.l  A1,-(SP)
+            move.w  D0,MemErr
+            rts
+Super_Unknown28:
+            movea.l (SP)+,A1
+            move.l  (SP)+,D0
+            _NewPtr
+            move.l  A0,(SP)
+            move.l  A1,-(SP)
+            move.w  D0,MemErr
+            rts
+RamDisk_Install:
+            movem.l A6-A0/D7-D0,-(SP)
+            moveq   #-50,D0
+            _DrvrInstall
+            lea     RAMDisk_Driver,A1
+            movea.l UTableBase,A0
+            movea.l ($C4,A0),A0
+            movea.l (A0),A0
+            move.l  A1,(A0)+
+            move.w  (A1),(A0)+
+            suba.w  #50,SP
+            movea.l SP,A0
+            clr.b   ($1B,A0)
+            lea     (RAMDisk_Name,PC),A1
+            move.l  A1,($12,A0)
+            clr.l   ($C,A0)
+            _Open
+            adda.w  #50,SP
+            movem.l (SP)+,D0-D7/A0-A6
+            rts
 RAMDisk_Driver:
             dc.w    $4F00
             dc.w    $0
@@ -692,6 +836,17 @@ RAMDisk_Name:
             dc.b    5
             dc.b    ".RAMd"
 RAMDisk_Open:
+            movem.l A1-A0/D0,-(SP)
+            bsr.w   RamDisk_Unknown1
+            movea.l OutboundGlobals,A2
+            tst.b   ($13C,A2)
+            beq.b   .Exit
+            moveq   #4,D0
+
+.Exit:
+            movem.l (SP)+,D0/A0-A1
+            move.w  #$FFE9,($10,A0)
+            rts
 RAMDisk_Close:
             clr.w   D0
             rts
@@ -703,9 +858,18 @@ RAMDisk_Status:
             bne.b   .L1
             lea     ($1C,A0),A2
 .L1:
+
+Super_Unknown15:
+
+Super_Unknown14:
+            link.w  A6,#-6
+            movem.l A4-A3/D7-D6,-(SP)
+            lea     (-3,A6),A4
+            lea     (-2,A6),A3
+
 Super_Install:
             movem.l A6-A0/D7-D0,-(SP)
-            movea.l $707D00,A1
+            movea.l OutboundGlobals,A1
             lea     ($140,A1),A0
             move.l  A0,($26,A1)
             moveq   #-5,D0
@@ -755,14 +919,14 @@ Super_Prime:
             movem.l A6-A0/D7-D1,-(SP)
             move.l  A1,-(SP)
             move.l  A0,-(SP)
-            movea.l $707D00,A0
+            movea.l OutboundGlobals,A0
             addq.w  #1,($34,A0)
             jsr     Super_Unknown3
             ; Fall-through
 
 Super_Unknown2:
             addq.l  #8,SP
-            movea.l $707D00,A0
+            movea.l OutboundGlobals,A0
             subq.w  #1,($34,A0)
             movem.l (SP)+,D1-D7/A0-A6
             move.w  D1,($10,A0)
@@ -777,7 +941,7 @@ Super_Ctl:
             movem.l A6-A0/D7-D1,-(SP)
             move.l  A1,-(SP)
             move.l  A0,-(SP)
-            movea.l $707D00,A0
+            movea.l OutboundGlobals,A0
             addq.w  #1,($34,A0)
             jsr     Super_Unknown4
             bra.b   Super_Unknown2
@@ -785,7 +949,7 @@ Super_Status:
             movem.l A6-A0/D7-D1,-(SP)
             move.l  A1,-(SP)
             move.l  A0,-(SP)
-            movea.l $707D00,A0
+            movea.l OutboundGlobals,A0
             addq.w  #1,($34,A0)
             jsr     Super_Unknown1
             bra.b   Super_Unknown2
@@ -876,7 +1040,7 @@ Super_Unknown9:
             rts
 Super_Unknown10:
             movem.l A6-A0/D7-D0,-(SP)
-            movea.l $707D00,A0
+            movea.l OutboundGlobals,A0
             move.w  #$14,($22,A0)
             tst.w   ($34,A0)
             bne.b   .Exit
@@ -933,7 +1097,52 @@ Super_Unknown4:
 Super_Unknown3:
 Super_Unknown5:
 PatchInitIOMgr4:
-PatchInitIOMgr7:
-RamDisk_Install:
+PatchLineA:
+            movem.l A6-A0/D7-D0,-(SP)
+            movea.l ($3E,SP),A0
+            btst.b  #IsMacSEROM,OutboundCfg
+            bne.b   .L5
+            cmpa.l  #$400B9A,A0
+            beq.w   .L21
+            cmpa.l  #$40073E,A0
+            beq.w   .L22
+            cmpa.l  #$4007CE,A0
+            beq.w   .L23
+            btst.b  #CfgBit3,OutboundCfg
+            bne.b   .L3
+            cmpi.w  #__InitGraf,(A0)
+            bne.b   .L1
+            bsr.w   PatchInitIOMgr8
+            bra.w   .L14
+.L1:
+            cmpa.l  #$401382,A0
+            bne.b   .L2
+            bra.b   .L6
+.L2:
+            cmpa.l  #$401328,A0
+            bne.b   .L3
+            bra.b   .L8
+.L3:
+            cmpa.l  #$4012AC,A0
+            bne.b   .L4
+            bra.b   .L10
+.L4:
+            cmpa.l  #$400A30,A0
+            bne.w   .L14
+            bra.w   .L12
+.L5:
+            cmpa.l  #$400D08,A0
+            beq.w   .L24
+            cmpa.l  #$400A6A,A0
+            beq.w   .L21
+            cmpa.l  #$400E72,A0
+            beq.w   .L25
+            btst.b  #CfgBit3,OutboundCfg
+            bne.b   .L9
+            cmpa.l  #$400F3A,A0
+            beq.w   .L26
+
+
+
 ReplaceTraps:
 

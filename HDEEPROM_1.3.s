@@ -43,7 +43,7 @@ PlusPatchTbl:
             dc.w    $4003A8-BaseOfROM 
             dc.w    PatchBootRetry-PtchROMBase
             dc.w    $400594-BaseOfROM
-            dc.w    PatchCPUFlag-PtchROMBase
+            dc.w    PatchWhichCPUPlus-PtchROMBase
             dc.w    $4005BC-BaseOfROM
             dc.w    PatchGetPRAM-PtchROMBase
             dc.w    $400972-BaseOfROM
