@@ -73,7 +73,7 @@ PatchException:
             rte                                     ; Go back to ROM code
 .PatchROM:
             cmpi.w  #$40,($4,SP)                    ; Ensure we are in the right ROM space ($40xxxx)
-            bne.b   .ExitException
+            bne.b   .ExitException                  ; Just incase we got a match in code not in main system ROM
             move.w  (SP)+,D0                        ; Restore D0
             move.l  A0,(-$8,SP)                     ; Save A0
             movea.l PtchTblBase,A0                  ; Load the patch location base
@@ -84,7 +84,7 @@ PatchException:
             move.w  (A0)+,PatchOffset               ; Load the next patch
             move.l  A0,PatchTblPtr                  ; Update position in table
             movea.l (-$4,SP),A0                     ; Restore A0
-            rts
+            rts                                     ; Go to the address we loaded onto the stack earlier
 ColdEntry:
             lea     OutboundVIA,A0
             moveq   #-$60,D0
@@ -359,7 +359,7 @@ PatchBootRetry:
 .L1:
 ; Copy the patch ROM into RAM
             move.l  A1,PtchTblBase
-            move.l  #$4000/4-1,D0                   ; 16KB total to copy
+            move.l  #16384/4-1,D0                   ; 16KB total to copy
 .CopyLoop:
             move.l  (A0)+,(A1)+
             dbf     D0,.CopyLoop
@@ -374,6 +374,8 @@ PatchBootRetry:
             bne.b   .L3
             movem.l (SP)+,D0/A0-A1                  ; Restore registers
             rte
+; Patch the WhichCPU instruction on the Plus ROM, possibly to
+; deal with the illegal instruction exception that is generated
 PatchWhichCPUPlus:
             pea     PatchExceptionUnknown
             move.l  (SP)+,Lev1AutoVector
@@ -608,6 +610,69 @@ PatchDrawBeepScreen:
             move.w  HWCfgFlags,D0
             bclr.l  #(1<<hwCbMMU|1<<hwCbAUX)>>8,D0
             move.w  D0,HWCfgFlags
+            lea     New_CountADBs,A0
+            move.w  #$77,D0
+            _SetOSTrapAddress
+            lea     New_GetIndADB,A0
+            move.w  #$78,D0
+            _SetOSTrapAddress
+            movem.l (SP)+,D0-D7/A0-A6
+            rte
+New_GetIndADB:
+            moveq   #-1,D0
+            rts
+New_CountADBs:
+            moveq   #0,D0
+            rts
+PatchLineA_L23:
+            lea     PatchLineA_Unknown1,A0
+            move.l  A0,($3E,SP)
+            movem.l (SP)+,D0-D7/A0-A6               ; Restore registers
+            rte
+PatchLineA_Unknown1:
+            move.l  #$40000,D0
+.L1:
+            subq.l  #1,D0
+            bne.b   .L1
+            _HideCursor
+            move.l  Ticks,D0
+.L2:
+            cmp.l   Ticks,D0
+            beq.b   .L2
+            movea.l #$400FA2,A4
+            movea.l #OutboundDisp+$3136,A2
+            btst.b  #CfgBit3,OutboundCfg
+            beq.b   .L3
+            movea.l #ScreenLow+$245E,A2
+.L3:
+            lea     .L4,A6
+            btst.b  #CfgBit3,OutboundCfg
+            beq.w   PatchLineA_Unknown2
+            jmp     $400EC4                         ; Plus ROM PutIcon?
+.L4:
+            tst.w   D7
+            beq.b   .L6
+            movea.l #OutboundDisp+$35E7,A2
+            btst.b  #CfgBit3,OutboundCfg
+            beq.b   .L5
+            movea.l #ScreenLow+$281F,A2
+.L5:
+            movea.l D7,A4
+            moveq   #14,D2
+            lea     .L6,A6
+            btst.b  #CfgBit3,OutboundCfg
+            beq.w   PatchLineA_Unknown3
+            jmp     $400F30
+.L6:
+            _ShowCursor
+            cmpi.l  #$4006DE,(SP)
+            bne.b   .Exit
+            subq.l  #4,SP
+            movea.l SP,A0
+            move.l  #$40078,D0                      ; Read the default startup device from PRAM
+            _ReadXPRam
+
+.Exit:
 
 RamSizing:
             suba.l  A0,A0
@@ -1105,7 +1170,7 @@ PatchLineA:
             cmpa.l  #$40073E,A0
             beq.w   .L22
             cmpa.l  #$4007CE,A0
-            beq.w   .L23
+            beq.w   PatchLineA_L23
             btst.b  #CfgBit3,OutboundCfg
             bne.b   .L3
             cmpi.w  #__InitGraf,(A0)
