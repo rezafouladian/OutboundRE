@@ -302,9 +302,9 @@ InitPatch:
 .L1:
             btst.b  #CfgBit2,OutboundCfg
             beq.b   .L2
-            jsr     $4004CE
+            jsr     $4004CE                         ; InitSCSI
 .L2:
-            jsr     $4003EE
+            jsr     $4003EE                         ; WhichCPU
             rte
 PatchBeep:
             movea.l #$707D1C,A0
@@ -674,6 +674,139 @@ PatchLineA_Unknown1:
 
 .Exit:
 
+PatchLineA:
+            movem.l A6-A0/D7-D0,-(SP)
+            movea.l ($3E,SP),A0
+            btst.b  #IsMacSEROM,OutboundCfg
+            bne.b   .L5
+            cmpa.l  #$400B9A,A0
+            beq.w   .L21
+            cmpa.l  #$40073E,A0
+            beq.w   .L22
+            cmpa.l  #$4007CE,A0
+            beq.w   PatchLineA_L23
+            btst.b  #CfgBit3,OutboundCfg
+            bne.b   .L3
+            cmpi.w  #__InitGraf,(A0)
+            bne.b   .L1
+            bsr.w   PatchInitIOMgr8
+            bra.w   .L14
+.L1:
+            cmpa.l  #$401382,A0
+            bne.b   .L2
+            bra.b   .L6
+.L2:
+            cmpa.l  #$401328,A0
+            bne.b   .L3
+            bra.b   .L8
+.L3:
+            cmpa.l  #$4012AC,A0
+            bne.b   .L4
+            bra.b   .L10
+.L4:
+            cmpa.l  #$400A30,A0
+            bne.w   .L14
+            bra.w   .L12
+.L5:
+            cmpa.l  #$400D08,A0
+            beq.w   .L24
+            cmpa.l  #$400A6A,A0
+            beq.w   .L21
+            cmpa.l  #$400E72,A0
+            beq.w   .L25
+            btst.b  #CfgBit3,OutboundCfg
+            bne.b   .L9
+            cmpa.l  #$400F3A,A0
+            beq.w   .L26
+            cmpa.l  #$401592,A0
+            bne.b   .L7
+.L6:
+            movea.l ($20,SP),A0
+            move.l  #$600060,(A0)
+            move.l  #$DE0220,($4,A0)
+            movea.l ($3E,SP),A0
+            bra.b   .L14
+.L7:
+            cmpa.l  #$401538,A0
+            bne.b   .L9
+.L8:
+            addi.l  #$200040,($42,SP)
+            bra.b   L14
+.L9:
+            cmpa.l  #$4014BC,A0
+            bne.b   .L11
+.L10:
+            bclr.b  #CfgBit5,OutboundCfg
+            btst.b  #CfgBit3,OutboundCfg
+            bne.b   .L14
+            movea.l ($20,SP),A0
+            addi.l  #$200040,(A0)
+            addi.l  #$200040,($4,A0)
+            movea.l ($3E,SP),A0
+            bra.b   .L14
+.L11:
+            cmpa.l  #$4008EE,A0
+            bne.b   .L14
+.L12:
+            bclr.b  #CfgBit5,OutboundCfg
+            btst.b  #CfgBit3,OutboundCfg
+            bne.b   .L14
+            move.w  #$40,($5C,SP)
+            pea     .L13
+            move.l  (SP)+,($48,SP)
+            bra.b   .L14
+.L13:
+            dc.l    $1D0040
+            dc.l    $1730240
+.L14:
+            btst.b  #CfgBit3,OutboundCfg
+            bne.b   .L16
+            cmpi.w  #$A647,(A0)
+            bne.b   .L15
+            cmpi.w  #$15,D0
+            bne.b   .L15
+            movem.l (SP)+,D0-D7/A0-A6
+            addq.l  #$2,($2,SP)
+            rte
+.L15:
+            btst.b  #CfgBit2,OutboundCfg
+            beq.b   .L17
+.L16:
+            cmpi.w  #$A9A5,(A0)
+            bne.w   .L20
+            move.l  $707D14,LineAVector
+            bra.b   .L20
+.L17:
+            cmpi.w  #$A9A0,(A0)
+            bne.b   .L18
+            cmpi.l  #"INIT",($44,SP)
+            bne.b   .L18
+            move.l  $707D14,LineAVector
+            bclr.b  #hwCbSCSI-7,HWCfgFlags
+            bra.b   .L20
+.L18:
+            cmpi.w  #$A02E,(A0)
+            bne.b   .L20
+            move.l  ($42,SP),D0
+            andi.l  #$3FFFFE,D0
+            movea.l D0,A0
+            cmpi.l  #$7262D3C2,(A0)+
+            bne.b   .L20
+            cmpi.l  #$21C90028,(A0)+
+            bne.b   .L20
+            btst.b  #IsMacSEROM,OutboundCfg
+            beq.b   .L19
+            btst.b  #CfgBit3,OutboundCfg
+            bne.b   .L19
+            move.l  ADBBase,D0
+            beq.b   .L19
+            movea.l D0,A0
+            bset.b  #2,($14D,A0)
+.L19:
+            
+
+
+
 RamSizing:
             suba.l  A0,A0
             move.b  #1,$50000B
@@ -695,15 +828,15 @@ RamSizing:
 .Exit:
             rts
 RamMirrorCheck:
-            move.l  D0,D1
-            move.w  D0,D2
+            move.l  D0,D1                           ; D1 = RAM location
+            move.w  D0,D2                           ; D2 = step number
             swap    D1
-            lsl.l   #3,D1
+            lsl.l   #3,D1                           ; Left shift to form memory address
 .WriteValues:
-            subi.l  #512*1024,D1
-            move.w  D2,(A0,D1)
-            subq.w  #1,D2
-            bne.b   .WriteValues
+            subi.l  #512*1024,D1                    ; Test on 512KB boundaries
+            move.w  D2,(A0,D1)                      ; Write step number to RAM
+            subq.w  #1,D2                           ; Decrement step counter
+            bne.b   .WriteValues                    ; Loop until complete
             move.l  D0,D1
             move.w  D0,D2
             swap    D1
@@ -722,6 +855,81 @@ RamMirrorCheck:
 PatchExceptionUnknown:
             movem.l A3-A0/D3-D0,-(SP)
             jmp     $401A60
+PatchInitIOMgr4_Data:
+            dc.b    $36
+            dc.b    $78
+            dc.b    $6
+            dc.b    $20
+            dc.b    $6
+            dc.b    $1E
+            dc.b    $48
+            dc.b    $8E
+            dc.b    $6
+            dc.b    $0
+PatchInitIOMgr4_Other:
+            moveq   #$50,D0
+            andi.w  #$260,-(A0)
+            bclr.l  D0,D0
+            bclr.b  D0,(A0)
+            moveq   #$50,D5
+            andi.w  #$190,(-$80,A0,D0*2)
+PatchInitIOMgr4:
+            movem.l A6-A0/D7-D0,-(SP)
+            move.b  #1,CrsrBusy
+            movea.l JCrsrObscure,A1
+            move.w  #$33,D0
+            _GetToolBoxTrapAddress
+            btst.b  #IsMacSEROM,OutboundCfg
+            bne.b   .L1
+            movea.l #$402000,A0
+.L1:
+            move.l  A0,D0
+            sub.l   A1,D0
+            move.l  D0,D1
+            movea.l A1,A2
+            _NewPtrSys
+            exg     A0,A1
+            move.l  D1,D0
+            _BlockMove
+            suba.l  A1,A0
+            move.l  A0,D0
+            movea.l #$800,A1
+            moveq   #7,D1
+.L2:
+            sub.l   D0,(A1)+
+            dbf     D1,.L2
+            btst.b  #IsMacSEROM,OutboundCfg
+            bne.b   .L3
+            sub.l   D0,JCrsrTask
+.L3:
+            lea     PatchInitIOMgr4_Data,A0
+            lea     PatchInitIOMgr4_Other,A1
+            suba.l  D0,A2
+            clr.w   D0
+.L4:
+            move.b  (A0)+,D0
+            beq.b   .L5
+            adda.w  D0,A2
+            move.w  (A1)+,(A2)
+            bra.b   .L4
+
+ReplaceTraps:
+            movem.l A1-A0/D2-D0,-(SP)
+            lea     New_InitUtil,A0
+            move.w  #$3F,D0
+            _SetTrapAddress
+            lea     New_WriteParam,A0
+            move.w  #$38,D0
+            _SetTrapAddress
+
+New_InitUtil:
+New_WriteParam:
+New_SetDateTime:
+New_ReadDateTime:
+New_SetDateTime2:
+New_ReadDateTime2:
+New_ReadXPRam:
+New_WriteXPRam:
 DrawWallaby:
             lea     .WallabyBitmap,A0
             movea.l #OutboundDisp+9335,A4
@@ -754,8 +962,83 @@ DrawWallaby:
 .Return:
             rts
 .WallabyBitmap:
+            incbin 'WallabyBitmap.bin'
 Shared_Unknown1:
+            movem.l D3-D0,-(SP)
+            move.w  #$1F,D3
+.L1:
+            move.l  (A1)+,D0
+            moveq   #-1,D1
+            move.w  #$1F,D2
+.L2:
+            btst.l  D2,D0
+            bne.b   .L4
+            bclr.l  D2,D1
+            dbf     D2,.L2
+.L3:
+            move.l  D1,($80,A0)
+            move.l  D0,(A0)+
+            dbf     D3,.L1
+            movem.l (SP)+,D0-D3
+            adda.w  #$80,A0
+            rts
+.L4:
+            clr.w   D2
+.L5:
+            btst.l  D2,D0
+            bne.b   .L3
+            bclr.l  D2,D1
+            addq.w  #1,D2
+            bra.b   .L5
 Shared_Unknown2:
+            link.w  A6,#-$32
+            movem.l A3-A1/D4-D1,-(SP)
+            lea     DrvQHdr,A2
+            movea.l ($6,A2),A3
+            movea.l ($2,A2),A1
+            moveq   #0,D0
+            move.w  ($16,A6),D0
+            move.w  ($A,A6),D3
+.L1:
+            cmp.w   ($8,A1),D3
+            beq.b   .L2
+            cmp.w   ($6,A1),D3
+            beq.b   .L3
+            cmpa.l  A1,A3
+            beq.b   .L4
+            movea.l (A1),A1
+            bra.b   .L1
+.L2:
+            move.w  ($6,A1),D0
+            bra.b   .L7
+.L3:
+            movea.l ($2,A2),A1
+            addq.w  #1,D0
+            bra.b   .L1
+.L4:
+            move.w  D0,D3
+            movea.l ($10,A6),A0
+            cmpa.w  #0,A0
+            bne.b   .L6
+            moveq   #$14,D0
+            _NewPtrSys
+            beq.b   .L5
+            bra.b   .L7
+.L5:
+            move.l  #$80000,(A0)+
+.L6:
+            move.w  #1,($4,A0)
+            clr.w   ($A,A0)
+            move.w  ($C,A6),($E,A0)
+            move.w  ($E,A6),($C,A0)
+            move.w  D3,D0
+            swap    D0
+            _AddDrive
+            move.w  D3,D0
+.L7:
+            movem.l (SP)+,D1-D4/A1-A3
+            unlk    A6
+            rts
 Super_Unknown27:
             move.l  D2,-(SP)
             move.l  D0,D2
@@ -820,13 +1103,13 @@ Super_Unknown25:
             jsr     Super_Unknown26
             move.l  D1,D0
             rts
-Super_Unknown24:
+Super_Unknown_VInstall:
             movea.l (SP)+,A1
             movea.l (SP)+,A0
             _VInstall
             move.w  D0,(SP)
             jmp     (A1)
-Super_Unknown23:
+Super_Unknown_PostEvent:
             movea.l (SP)+,A1
             move.l  (SP)+,D0
             movea.w (SP)+,A0
@@ -849,7 +1132,7 @@ Super_Unknown21:
             movea.l UTableBase,A1
             move.l  (A1,D0),(SP)
             jmp     (A0)
-Super_Unknown20:
+Super_Unknown_BlockMove:
             move.l  (SP)+,D1
             move.l  (SP)+,D0
             movea.l (SP)+,A1
@@ -907,6 +1190,7 @@ RAMDisk_Open:
             tst.b   ($13C,A2)
             beq.b   .Exit
             moveq   #4,D0
+            move.l  D0,-(SP)
 
 .Exit:
             movem.l (SP)+,D0/A0-A1
@@ -1159,53 +1443,10 @@ Super_Unknown11:
 Super_Unknown4:
 Super_Unknown3:
 Super_Unknown5:
-PatchInitIOMgr4:
-PatchLineA:
-            movem.l A6-A0/D7-D0,-(SP)
-            movea.l ($3E,SP),A0
-            btst.b  #IsMacSEROM,OutboundCfg
-            bne.b   .L5
-            cmpa.l  #$400B9A,A0
-            beq.w   .L21
-            cmpa.l  #$40073E,A0
-            beq.w   .L22
-            cmpa.l  #$4007CE,A0
-            beq.w   PatchLineA_L23
-            btst.b  #CfgBit3,OutboundCfg
-            bne.b   .L3
-            cmpi.w  #__InitGraf,(A0)
-            bne.b   .L1
-            bsr.w   PatchInitIOMgr8
-            bra.w   .L14
-.L1:
-            cmpa.l  #$401382,A0
-            bne.b   .L2
-            bra.b   .L6
-.L2:
-            cmpa.l  #$401328,A0
-            bne.b   .L3
-            bra.b   .L8
-.L3:
-            cmpa.l  #$4012AC,A0
-            bne.b   .L4
-            bra.b   .L10
-.L4:
-            cmpa.l  #$400A30,A0
-            bne.w   .L14
-            bra.w   .L12
-.L5:
-            cmpa.l  #$400D08,A0
-            beq.w   .L24
-            cmpa.l  #$400A6A,A0
-            beq.w   .L21
-            cmpa.l  #$400E72,A0
-            beq.w   .L25
-            btst.b  #CfgBit3,OutboundCfg
-            bne.b   .L9
-            cmpa.l  #$400F3A,A0
-            beq.w   .L26
 
 
 
-ReplaceTraps:
+
+
+
 
