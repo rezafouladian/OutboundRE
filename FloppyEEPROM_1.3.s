@@ -19,6 +19,7 @@ SEPatchTbl:
             dc.w    PatchBeep-PtchROMBase
             dc.w    $4000D2-BaseOfROM
             dc.w    PatchBootRetry-PtchROMBase
+PatchLocGetPRAM:
             dc.w    $400358-BaseOfROM
             dc.w    PatchGetPRAM-PtchROMBase
             dc.w    $4001A0-BaseOfROM
@@ -42,6 +43,7 @@ PlusPatchTbl:
             dc.w    PatchPlusBoot2-PtchROMBase
             dc.w    $4003A8-BaseOfROM 
             dc.w    PatchBootRetry-PtchROMBase
+PatchLocPlusCPU:
             dc.w    $400594-BaseOfROM
             dc.w    PatchWhichCPUPlus-PtchROMBase
             dc.w    $4005BC-BaseOfROM
@@ -59,7 +61,7 @@ PlusPatchTbl:
             dc.l    TROMCode
             dc.l    WarmEntry
             dc.b    5                               ; Length byte
-            dc.b    "1.3b2"                         ; ROM version string
+            dc.b    "1.3b2"                         ; Patch ROM version string
             dc.b    0,0,1,3
 ; Called once every instruction while trace bit is set.
 ; Checks the current Program Counter to see if it an address to patch.
@@ -327,6 +329,7 @@ PatchPlusBoot:
 PatchClkNoMem:
             move.w  #$252,(4,SP)
             rte
+; Patch ROM entry point reached if the system is restarting
 WarmEntry:
             move.l  #PatchException,TraceVector
             move    1<<TraceBit|1<<Supervisor|1<<InterruptBit2|1<<InterruptBit1|1<<InterruptBit0,SR
@@ -803,10 +806,47 @@ PatchLineA:
             movea.l D0,A0
             bset.b  #2,($14D,A0)
 .L19:
-            
-
-
-
+            movem.l (SP)+,D0-D7/A0-A6
+            _BlockMove
+            addq.l  #2,($2,SP)
+            move.l  A1,$707D14
+            movea.l LineAVector,A1
+            rte
+.L20:
+            movem.l (SP)+,D0-D7/A0-A6
+            move.l  $707D14,-(SP)
+            rts
+.L21:
+            lea     .L22,A0
+            move.l  A0,($3E,SP)
+            movem.l (SP)+,D0-D7/A0-A6
+            rte
+.L22:
+            _Control
+            beq.b   .L23
+            move.w  BootMask,D0
+            bclr.l  D3,D0
+            move.w  D0,BootMask
+.L23:
+            movea.l PtchTblBase,A0
+            adda.w  #$92,A0
+            move.l  A0,TraceVector
+            btst.b  #IsMacSEROM,OutboundCfg
+            bne.b   .L24
+            lea     PatchLocPlusCPU,A6
+            bra.b   .L25
+.L24:
+            lea     PatchLocGetPRAM,A6
+.L25:
+            move.w  (A6)+,ExpectedPC
+            move.w  (A6)+,PatchOffset
+            move.l  A6,PatchTblPtr
+            move    #1<<TraceBit|1<<Supervisor|1<<InterruptBit2|1<<InterruptBit1|1<<InterruptBit0,SR
+            btst.b  #IsMacSEROM,OutboundCfg
+            bne.b   .MacSEExit
+            jmp     $4003AC
+.MacSEExit:
+            jmp     $4000D6
 RamSizing:
             suba.l  A0,A0
             move.b  #1,$50000B
@@ -930,6 +970,8 @@ New_SetDateTime2:
 New_ReadDateTime2:
 New_ReadXPRam:
 New_WriteXPRam:
+; I'm fairly certain this is the step that draws the Wallaby logo on the Outbound's
+; screen, but I'm not entirely sure.
 DrawWallaby:
             lea     .WallabyBitmap,A0
             movea.l #OutboundDisp+9335,A4
