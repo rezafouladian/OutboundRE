@@ -1,3 +1,6 @@
 [submodule "ROMTools"]
 	path = ROMTools
 	url = https://github.com/rezafouladian/MacintoshROMTools.git
+[submodule "SEROM"]
+	path = SEROM
+	url = https://github.com/rezafouladian/MacintoshSEROM.git
