@@ -2,6 +2,7 @@
             INCLUDE 'ROMTools/Globals.s'
             INCLUDE 'ROMTools/CommonConst.s'
             INCLUDE 'ROMTools/TrapMacros.s'
+            ;INCLUDE 'SEROM/ROM.s'
 
             org     $F80000
             dc.l    TROMCode
@@ -1475,7 +1476,34 @@ Super_Unknown12:
             rts
 Super_Unknown13:
             link.w  A6,#0
-
+            movem.l A0/D2-D1,-(SP)
+            movea.l (8,A6),A0
+            move.w  ($E,A6),D0
+            subq.w  #1,D0
+.L1:
+            move.l  #100000,D1
+.L2:
+            move.b  $C80018,D2
+            bmi.b   .L4
+            subq.l  #1,D1
+            bne.b   .L2
+.L3:
+            moveq   #0,D0
+            bra.b   .Exit
+.L4:
+            btst.l  #6,D2
+            beq.b   .L3
+            move.b  $C8001A,(A0)+
+            dbf     D0,.L1
+            moveq   #1,D0
+.Exit:
+            movem.l (SP)+,D1-D2/A0
+            unlk    A6
+            rts
+Super_Unknown29:
+            link.w  A6,#0
+            movem.l A2-A0/D3-D1,-(SP)
+            movea.l #$C80018,A0
             
 ;temp
 Super_Unknown1:
