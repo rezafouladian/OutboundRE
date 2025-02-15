@@ -678,8 +678,89 @@ PatchLineA_Unknown1:
             movea.l SP,A0
             move.l  #$40078,D0                      ; Read the default startup device from PRAM
             _ReadXPRam
-
+            move.l  (SP)+,D3
+            move.l  $30A,D0
+            beq.b   .Exit
+.L7:
+            movea.l D0,A0
+            cmp.w   ($8,A0),D3
+            beq.b   .L8
+            move.l  (A0),D0
+            bne.b   .L7
+            bra.b   .Exit
+.L8:
+            move.l  $30A,D0
+.L9:
+            movea.l D0,A0
+            cmpi.w  #4,($6,A0)
+            bge.b   .L10
+            move.l  (A0),D0
+            bne.b   .L9
+            bra.b   .Exit
+.L10:
+            cmp.w   ($8,A0),D3
+            beq.b   .Exit
+            movea.l A0,A2
+            lea     DrvQHdr,A1
+            _Dequeue
+            movea.l A2,A0
+            lea     DrvQHdr,A1
+            _Enqueue
+            bra.b   .L8
 .Exit:
+            rts
+PatchLineA_Unknown1_L22:
+            move.w  BootMask,D0
+            btst.l  D3,D0
+            bne.b   .L1
+            movea.l #$400762,A0
+            clr.l   ($4,SP)
+            bra.b   .L2
+.L1:
+            _HideCursor
+            movea.l #$400740,A0
+            btst.b  #CfgBit3,OutboundCfg
+            bne.b   .L2
+            lea     .L3,A0
+.L2:
+            move.l  A0,($3E,SP)
+            movem.l (SP)+,D0-D7/A0-A6
+            rte
+.L3:
+            movem.l A6-A5,-(SP)
+            movea.l #$40074C,A5
+            bra.w   PatchLineA_L24_2
+PatchLineA_Unknown1_L22_L4:
+            lea     PatchLineA_Unknown1_L22_L5,A0
+            move.l  A0,($3E,SP)
+            movem.l (SP)+,D0-D7/A0-A6
+            rte
+PatchLineA_Unknown1_L22_L5:
+            moveq   #1,D0
+.L1:
+            subq.l  #1,D0
+            bne.b   .L1
+            _HideCursor
+            move.l  Ticks,D0
+.L2:
+            cmp.l   Ticks,D0
+            beq.b   .L2
+            movea.l #$400FB2,A4
+            movea.l #$703136,A2
+            BSR6    PatchLineA_Unknown2
+            tst.w   D7
+            beq.b   .L3
+            movea.l #$7035E7,A2
+            movea.l D7,A4
+            moveq   #$E,D2
+            BSR6    PatchLineA_Unknown3
+.L3:
+            _ShowCursor
+            movem.l (SP)+,D3-D7/A2-A6
+            rts
+PatchLineA_L25:
+            move.w  ($6,A2),D3
+
 
 PatchLineA:
             movem.l A6-A0/D7-D0,-(SP)
@@ -724,7 +805,7 @@ PatchLineA:
             btst.b  #CfgBit3,OutboundCfg
             bne.b   .L9
             cmpa.l  #$400F3A,A0
-            beq.w   .L26
+            beq.w   PatchLineA_Unknown1_L22\.L4
             cmpa.l  #$401592,A0
             bne.b   .L7
 .L6:
@@ -916,7 +997,8 @@ PatchInitIOMgr4_Other:
             bclr.l  D0,D0
             bclr.b  D0,(A0)
             moveq   #$50,D5
-            andi.w  #$190,(-$80,A0,D0*2)
+            ;andi.w  #$190,(-$80,A0,D0*2)
+            dc.w    $0270, $0190, $0280
 PatchInitIOMgr4:
             movem.l A6-A0/D7-D0,-(SP)
             move.b  #1,CrsrBusy
@@ -1507,6 +1589,75 @@ Super_Unknown29:
             link.w  A6,#0
             movem.l A2-A0/D3-D1,-(SP)
             movea.l #$C80018,A0
+            movea.l #$C8001A,A1
+            movea.l ($8,A6),A2
+            moveq   #-80,D0
+            move.l  ($C,A6),D1
+            subq.w  #1,D1
+            move    SR,D3
+            move    #$2300,SR
+.L1:
+            move.l  #100000,D2
+.L2:
+            cmp.b   (A0),D0
+            bne.b   .L3
+            move.b  (A2)+,(A1)
+            dbf     D1,.L1
+            moveq   #1,D0
+            bra.b   .L4
+.L3:
+            subq.l  #1,D2
+            bne.b   .L2
+            moveq   #0,D0
+.L4:
+            move    D3,SR
+            movem.l (SP)+,D1-D3/A0-A2
+            unlk    A6
+            rts
+Super_0028e476:
+            link.w  A6,#0
+            movem.l A2-A0/D3-D1,-(SP)
+            movea.l #$C80018,A0
+            movea.l #$C8001A,A1
+            movea.l ($8,A6),A2
+            moveq   #-15,D0
+            move.l  ($C,A6),D1
+            subq.w  #1,D1
+            move    SR,D3
+            move    #$2300,SR
+.L1:
+            move.l  #100000,D2
+.L2:
+            cmp.b   (A0),D0
+            bne.b   .L3
+            move.b  (A1),(A2)+
+            dbf     D1,.L1
+            moveq   #1,D0
+            bra.b   .L4
+.L3:
+            subq.l  #1,D2
+            bne.b   .L2
+            moveq   #0,D0
+.L4:
+            move    D3,SR
+            movem.l (SP)+,D1-D3/A0-A2
+            unlk    A6
+            rts
+Super_0028e4c0:
+            movem.l A4-A3/D7,-(SP)
+            movem.l ($10,SP),D7/A3-A4
+            exg     D7,A4
+            moveq   #0,D0
+.L1:
+            subq.l  #1,D7
+            bmi.b   .L2
+            cmpm.b  (A3)+,(A4)+
+            beq.b   .L1
+            moveq   #-68,D0
+.L2:
+            movem.l (SP)+,D7/A3-A4
+            rts
+
             
 ;temp
 Super_Unknown1:
