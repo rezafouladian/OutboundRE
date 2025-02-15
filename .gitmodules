@@ -4,3 +4,6 @@
 [submodule "SEROM"]
 	path = SEROM
 	url = https://github.com/rezafouladian/MacintoshSEROM.git
+[submodule "Plus"]
+	path = Plus
+	url = https://github.com/rezafouladian/MacintoshPlusROM.git
