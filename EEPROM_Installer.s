@@ -128,7 +128,7 @@ EEPROM_Installer
 hasHD:
             link.w  A6,#0
             moveq   #0,D0
-            moveq   #HDPresent,D1
+            moveq   #1<<HDPresent,D1
             and.b   OutboundCfg2,D1
             sne     D0
             neg.b   D0

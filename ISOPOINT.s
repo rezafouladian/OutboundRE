@@ -59,7 +59,7 @@ ISOPOINT:
             move.l  #$12345678,(A0)
             move.l  A4,-(SP)
             _ReleaseResource
-            jsr     F2
+            jsr     ISOPOINT_F2
 .Exit:
             moveq   #0,D0
             movem.l (-8,A6),A3-A4
@@ -68,7 +68,7 @@ ISOPOINT:
             dc.b    $84
             dc.b    'main'
             dc.b    $0,$0,$0
-F1:
+ISOPOINT_F1:
             tst.l   ($94,A1)
             beq.w   .Exit
             tst.w   ($34,A1)
@@ -143,16 +143,16 @@ ISOPOINT_Data:
             dc.l    $1020203
             dc.l    $3FFFFFF
             dc.b    $0,$0
-F2:
+ISOPOINT_F2:
             movem.l A1-A0/D1-D0,-(SP)
-            lea     F1,A0
-            lea     F2,A1
+            lea     ISOPOINT_F1,A0
+            lea     ISOPOINT_F2,A1
             suba.l  A0,A1
             move.l  A1,D0
             move.l  D0,D1
             _NewPtrSys
             movea.l A0,A1
-            lea     F1,A0
+            lea     ISOPOINT_F1,A0
             move.l  D1,D0
             _BlockMove
             movea.l OutboundGlobals,A0
