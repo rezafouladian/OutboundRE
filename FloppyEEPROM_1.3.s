@@ -1110,7 +1110,7 @@ DrawWallaby:
 .Return:
             rts
 .WallabyBitmap:
-            incbin 'WallabyBitmap.bin'
+            incbin 'bin/WallabyBitmap.bin'
 Shared_Unknown1:
             movem.l D3-D0,-(SP)
             move.w  #$1F,D3
@@ -1465,12 +1465,12 @@ Super_Name:
             dc.b    ".Super"                        ; Driver name
             dc.b    0,0,0
 Super_UnknownData:
-            incbin  'Super_UnknownData.bin'
+            incbin  'bin/Super_UnknownData.bin'
             dc.b    21                              ; Length byte
             dc.b    "Outbound Floppy Drive"
             dc.b    0,0
 Super_UnknownData2:
-            incbin  'Super_UnknownData2.bin'
+            incbin  'bin/Super_UnknownData2.bin'
 Super_Unknown6:
             movem.l A6-A0/D7-D0,-(SP)
             movea.l #$B00003,A0

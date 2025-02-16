@@ -112,9 +112,9 @@ HDDriver_Name:
             dc.b    5
             dc.b    ".PTek"
 HDDriver_UnknownData1:
-            incbin  'HDDriver_UnknownData1.bin'
+            incbin  'bin/HDDriver_UnknownData1.bin'
 HDDriver_UnknownData2:
-            incbin  'HDDriver_UnknownData2.bin'
+            incbin  'bin/HDDriver_UnknownData2.bin'
             dc.b    18
             dc.b    "Outbound Hard Disk"
             dc.b    0,0,0
