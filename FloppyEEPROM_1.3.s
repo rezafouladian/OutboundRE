@@ -24,7 +24,7 @@ SEPatchTbl:
             dc.w    $4000D2-BaseOfROM
             dc.w    PatchBootRetry-PtchROMBase
 PatchLocGetPRAM:
-            dc.w    $400358-BaseOfROM
+            dc.w    GetPRAM\.OB_GetPRAMSEPatch-BaseOfROM
             dc.w    PatchGetPRAM-PtchROMBase
             dc.w    $4001A0-BaseOfROM
             dc.w    PatchSetupSysAppZone-PtchROMBase
@@ -1038,7 +1038,27 @@ PatchInitIOMgr4:
             adda.w  D0,A2
             move.w  (A1)+,(A2)
             bra.b   .L4
-
+.L5:
+            lea     .L5,A0
+            move.w  #$33,D0
+            _SetToolBoxTrapAddress
+            move.l  #OutboundDisp,ScrnBase
+            move.w  #80,ScreenRow
+            move.w  #640,$83A
+            move.w  $400,$838
+            clr.b   CrsrBusy
+            move.l  #$707D1C,SoundBase
+            movem.l (SP)+,D0-D7/A0-A6
+            rts
+.L6:
+            movea.l (SP)+,A1
+            movea.l (SP)+,A0
+            move.l  ScrnBase,(A0)+
+            move.w  ScreenRow,(A0)+
+            clr.l   (A0)+
+            move.w  #400,(A0)+
+            move.w  #640,(A0)
+            jmp     (A1)
 ReplaceTraps:
             movem.l A1-A0/D2-D0,-(SP)
             lea     New_InitUtil,A0
@@ -1667,6 +1687,10 @@ Super_Unknown11:
 Super_Unknown4:
 Super_Unknown3:
 Super_Unknown5:
+RamDisk_Unknown1:
+PatchLineA_Unknown2:
+PatchLineA_Unknown3:
+PatchInitIOMgr8:
 
 
 
