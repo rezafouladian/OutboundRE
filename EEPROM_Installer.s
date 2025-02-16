@@ -1,6 +1,10 @@
             INCLUDE 'ROMTools/Include.s'
             INCLUDE 'ROMTools/TrapMacros.s'
             INCLUDE 'ROMTools/Globals.s'
+            INCLUDE 'ROMTools/CommonConst.s'
+            INCLUDE 'ROMTools/Hardware/Outbound125.s'
+
+ROMData     EQU     -12
             
 
             link.w  A6,#-$10
@@ -11,7 +15,7 @@
             move.b  #1,($1C,A6)
             bra.w   .Exit
 .L1:
-            jsr     HasHD
+            jsr     hasHD
             tst.l   D0
             beq.b   .NoHD
             subq.l  #4,SP
@@ -50,7 +54,7 @@
             movea.l (ROMData,A6),A0
             movea.l (A0),A3
             move.l  #$7C0000,(-16,A6)
-            movea.l #$F80000,A4
+            movea.l #PtchROMBase,A4
             subq.l  #4,SP
             move.l  (ROMData,A6),-(SP)
             _SizeRsrc
@@ -99,7 +103,7 @@
             bgt.b   .L6
             pea     (-8,A6)
             _PaintRect
-            addq.w  #1(-2,A6)
+            addq.w  #1,(-2,A6)
             add.l   D4,D5
 .L6:
             adda.w  #2,A3
@@ -123,5 +127,47 @@ onWallaby:
             link.w  A6,#0
             movem.l D7-D6,-(SP)
             movea.l ROMBase,A0
-
-
+            move.w  (8,A0),D7
+            cmpi.w  #PlusROMVersion,D7
+            beq.b   .L1
+            cmpi.w  #UnknownROM,D7
+            beq.b   .L1
+            cmpi.w  #SEROMVersion,D7
+            bne.b   .L4
+.L1:
+            cmpi.l  #TROMCode,PtchROMBase
+            beq.b   .L2
+            moveq   #0,D0
+            bra.b   .L5
+.L2:
+            move.l  OutboundDisp,D6
+            move.l  #"WSIS",OutboundDisp
+            cmpi.l  #'WSIS',OutboundDisp
+            beq.b   .L3
+            moveq   #0,D0
+            bra.b   .L5
+.L3:
+            move.l  D6,OutboundDisp
+            moveq   #1,D0
+            bra.b   .L5
+.L4:
+            moveq   #0,D0
+.L5:
+            movem.l (-8,A6),D6-D7
+            unlk    A6
+            rts
+            dc.b    $89
+            dc.b    'onWallaby'
+            dc.b    $0,$0
+hasHD:
+            link.w  A6,#0
+            moveq   #0,D0
+            moveq   #Cfg2Bit1,D1
+            and.b   OutboundCfg2,D1
+            sne     D0
+            neg.b   D0
+            unlk    A6
+            rts
+            dc.b    $85
+            dc.b    'hasHD'
+            dc.b    $0,$0
