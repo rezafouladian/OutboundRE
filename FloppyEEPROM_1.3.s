@@ -579,7 +579,7 @@ PatchInitIOMgr2:
             bne.b   .L4
             bra.b   .L6
 .L5:
-            bset.b  #Cfg2Bit1,OutboundCfg2
+            bset.b  #HDPresent,OutboundCfg2
 .L6:
             move.l  (SP)+,LineAVector
             lea     VBase,A0

@@ -6,13 +6,13 @@
 
 ROMData     EQU     -12
             
-
+EEPROM_Installer
             link.w  A6,#-$10
-            movem.l A4-A3/D7-D4,-(SP)
-            jsr     onWallaby
-            tst.l   D0
+            movem.l A4-A3/D7-D4,-(SP)               ; Save registers
+            jsr     onWallaby                       ; Test if we're on compatible hardware
+            tst.l   D0                              ; Check the result
             bne.b   .L1
-            move.b  #1,($1C,A6)
+            move.b  #1,(28,A6)
             bra.w   .Exit
 .L1:
             jsr     hasHD
@@ -32,7 +32,6 @@ ROMData     EQU     -12
             move.w  D0,-(SP)                        ; Set resource ID
             _GetResource
             move.l  (SP)+,(ROMData,A6)
-            bra.b   .L2
 .L2:
             pea     (-8,SP)
             moveq   #$14,D0
@@ -118,51 +117,18 @@ ROMData     EQU     -12
             _ReleaseResource
             move.b  #1,(28,A6)
 .Exit:
-            movem.l (-$28,A6),D4-D7/A3-A4
+            movem.l (-$28,A6),D4-D7/A3-A4           ; Restore registers
             unlk    A6
             movea.l (SP)+,A0
             adda.w  #$14,SP
             jmp     (A0)
-onWallaby:
-            link.w  A6,#0
-            movem.l D7-D6,-(SP)
-            movea.l ROMBase,A0
-            move.w  (8,A0),D7
-            cmpi.w  #PlusROMVersion,D7
-            beq.b   .L1
-            cmpi.w  #UnknownROM,D7
-            beq.b   .L1
-            cmpi.w  #SEROMVersion,D7
-            bne.b   .L4
-.L1:
-            cmpi.l  #TROMCode,PtchROMBase
-            beq.b   .L2
-            moveq   #0,D0
-            bra.b   .L5
-.L2:
-            move.l  OutboundDisp,D6
-            move.l  #"WSIS",OutboundDisp
-            cmpi.l  #'WSIS',OutboundDisp
-            beq.b   .L3
-            moveq   #0,D0
-            bra.b   .L5
-.L3:
-            move.l  D6,OutboundDisp
-            moveq   #1,D0
-            bra.b   .L5
-.L4:
-            moveq   #0,D0
-.L5:
-            movem.l (-8,A6),D6-D7
-            unlk    A6
-            rts
-            dc.b    $89
-            dc.b    'onWallaby'
-            dc.b    $0,$0
+            INCLUDE 'onWallaby.s'
+; hasHD
+; Read Outbound config register to see if a hard drive is present
 hasHD:
             link.w  A6,#0
             moveq   #0,D0
-            moveq   #Cfg2Bit1,D1
+            moveq   #HDPresent,D1
             and.b   OutboundCfg2,D1
             sne     D0
             neg.b   D0
