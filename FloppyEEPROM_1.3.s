@@ -174,7 +174,7 @@ ColdEntry:
 .L5:
             bset.b  #CfgBit2,OutboundCfg
 .L6:
-            clr.b   SCSI_ICRwrite
+            clr.b   SCSIWr+sICR
 .L7:
             movea.l OutboundGlobals,SP
             move.l  #PatchException,TraceVector
@@ -805,7 +805,7 @@ PatchLineA:
             btst.b  #CfgBit3,OutboundCfg
             bne.b   .L9
             cmpa.l  #$400F3A,A0
-            beq.w   PatchLineA_Unknown1_L22\.L4
+            beq.w   PatchLineA_Unknown1_L22_L4
             cmpa.l  #$401592,A0
             bne.b   .L7
 .L6:
@@ -819,7 +819,7 @@ PatchLineA:
             bne.b   .L9
 .L8:
             addi.l  #$200040,($42,SP)
-            bra.b   L14
+            bra.b   .L14
 .L9:
             cmpa.l  #$4014BC,A0
             bne.b   .L11
@@ -1691,7 +1691,7 @@ RamDisk_Unknown1:
 PatchLineA_Unknown2:
 PatchLineA_Unknown3:
 PatchInitIOMgr8:
-
+PatchLineA_L24_2:
 
 
 
