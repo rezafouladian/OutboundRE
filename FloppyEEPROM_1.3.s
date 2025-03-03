@@ -760,8 +760,110 @@ PatchLineA_Unknown1_L22_L5:
             rts
 PatchLineA_L25:
             move.w  ($6,A2),D3
-
-
+            move.w  BootMask,D0
+            btst.l  D3,D0
+            bne.b   .L1
+            movea.l #$400CBE,A0
+            bra.b   .L2
+.L1:
+            _HideCursor
+            movea.l #$400E74,A0
+            btst.b  #CfgBit3,OutboundCfg
+            bne     .L2
+            lea     .L3,A0
+.L2:
+            move.l  A0,($3E,SP)
+            movem.l (SP)+,D0-D7/A0-A6
+            rte
+.L3:
+            movem.l A6-A5,-(SP)
+            movea.l #$40125C,A0
+            movea.l A6,A5
+            lea     $4011F8,A4
+            move.l  A0,D5
+            movea.l #$703136,A2
+            lea     .L4,A6
+            bra.b   PatchLineA_Unknown2
+.L4:
+            movea.l #$703317,A2
+            movea.l D5,A4
+            lea     .L5,A6
+            bra.b   PatchLineA_Unknown4
+.L5:
+            movem.l (SP)+,A5-A6
+            rts
+PatchLineA_L24:
+            movea.l ($20,SP),A0
+            clr.l   (A0)
+            move.l  DrvQHdr+2,D0
+            beq.b   .L2
+.L1:
+            movea.l D0,A1
+            cmpi.w  #4,($6,A1)
+            bge.b   .L2
+            tst.b   (-3,A1)
+            bne.b   .L3
+            move.l  (A1),D0
+            bne.b   .L1
+.L2:
+            _GetDefaultStartup
+.L3:
+            move.l  #$400D0A,($3E,SP)
+            movem.l (SP)+,D0-D7/A0-A6
+            rte
+PatchLineA_L24_2:
+            movea.l #$400F3E,A4
+            lea     $400FD2,A0
+            move.l  A0,D7
+            movea.l #$703136,A2
+            lea     .L1,A6
+            bra.b   PatchLineA_Unknown2
+.L1:
+            movea.l #$703317,A2
+            movea.l D7,A4
+            lea     .L2,A6
+            bra.b   PatchLineA_Unknown4
+.L2:
+            jmp     (A5)
+PatchLineA_Unknown4:
+            moveq   #9,D2
+PatchLineA_Unknown3:
+            move.b  (A4)+,(A2)+
+            move.b  (A4)+,(A2)+
+            adda.w  #$4E,A2
+            dbf     D2,PatchLineA_Unknown3
+            jmp     (A6)
+PatchLineA_Unknown2:
+            moveq   #$F,D3
+            movea.l A2,A0
+            moveq   #3,D2
+.L1:
+            move.w  #$100,D4
+            move.b  (A4)+,D4
+.L2:
+            lsr.w   #1,D4
+            beq.b   .L5
+            bcc.b   .L3
+            clr.b   (A2)+
+            bra.b   .L4
+.L3:
+            move.b  (A4)+,(A2)+
+.L4:
+            dbf     D2,.L2
+            adda.w  #$4C,A2
+            moveq   #3,D2
+            bra.b   .L2
+.L5:
+            dbf     D3,.L1
+            movea.l A0,A1
+            moveq   #$1E,D3
+.L6:
+            adda.w  #$50,A1
+            move.l  (A0),D4
+            eor.l   D4,(A1)
+            movea.l A1,A0
+            dbf     D3,.L6
+            jmp     (A6)
 PatchLineA:
             movem.l A6-A0/D7-D0,-(SP)
             movea.l ($3E,SP),A0
@@ -771,6 +873,8 @@ PatchLineA:
             beq.w   .L21
             cmpa.l  #$40073E,A0
             beq.w   .L22
+            cmpa.l  #$4007CE,A0
+            beq.w   PatchLineA_Unknown1_L22
             cmpa.l  #$4007CE,A0
             beq.w   PatchLineA_L23
             btst.b  #CfgBit3,OutboundCfg
@@ -1067,15 +1171,130 @@ ReplaceTraps:
             lea     New_WriteParam,A0
             move.w  #$38,D0
             _SetTrapAddress
-
+            lea     New_ReadDateTime,A0
+            move.w  #$39,D0
+            _SetTrapAddress
+            lea     New_SetDateTime,A0
+            move.w  #$3A,D0
+            _SetTrapAddress
+            lea     New_ReadXPRam,A0
+            move.w  #$51,D0
+            _SetOSTrapAddress
+            lea     New_WriteXPRam,A0
+            move.w  #$52,D0
+            _SetOSTrapAddress
+            lea     OutboundVIA,A0
+            ori.b   #7,(vDIRB,A0)
+            bclr.b  #1,(vBufB,A0)
+            bset.b  #2,(vBufB,A0)
+            move.b  #-$4F,D0
+            bsr.b   ReplaceTraps_Unknown1
+            move.b  #-$4B,D0
+            bsr.b   ReplaceTraps_Unknown1
+            bset.b  #2,(vBufB,A0)
+            movem.l (SP)+,D0-D2/A0-A1
+            rts
 New_InitUtil:
+            movem.l A1-A0/D1,-(SP)
+            lea     Time,A0
+            _ReadDateTime
+            lea     SPValid,A0
+            move.w  #$14,D1
+            clr.w   D0
+            bsr.w   CommonUnknown1
+            cmpi.b  #-$58,SPValid
+            beq.b   .L3
+            lea     SPValid,A1
+            btst.b  #IsMacSEROM,OutboundCfg
+            beq.b   .L1
+            movea.l #$40A0F8,A0
+            bra.b   .L2
+.L1:
+            movea.l #$40FCAE,A0
+.L2:
+            moveq   #$14,D0
+            _BlockMove
+            lea     SPValid,A0
+            move.l  MinusOne,D0
+            _WriteParam
+            moveq   #0,D0
+            _SetDateTime
+            moveq   #-$58,D0
+            bra.b   .L4
+.L3:
+            moveq   #0,D0
+.L4:
+            movem.l (SP)+,D1/A0-A1
+            rts
 New_WriteParam:
+            movem.l A1-A0/D1,-(SP)
+            move.w  #$14,D1
+            clr.w   D0
+            bsr.w   CommonUnknown2
+            lea     Scratch20,A0
+            move.w  #$14,D1
+            clr.w   D0
+            bsr.w   CommonUnknown1
+            moveq   #0,D0
+            movem.l (SP)+,D1/A0-A1
+            rts
 New_SetDateTime:
+            movem.l A1-A0/D1,-(SP)
+            suba.w  #14,SP
+            movea.l SP,A0
+            move.l  D0,Time
+            _SecondsToDate
+            subq.l  #8,SP
+            move.w  (A0)+,D0
+            subi.w  #$76C,D0
+            bsr.w   New_SetDateTime2
+            move.b  D0,(6,SP)
+            move.w  (A0)+,D0
+            bsr.w   New_SetDateTime2
+            move.b  D0,(5,SP)
+            move.w  (A0)+,D0
+            bsr.w   New_SetDateTime2
+            move.b  D0,(4,SP)
+            move.w  (A0)+,D0
+            bsr.w   New_SetDateTime2
+            move.b  D0,(2,SP)
+            move.w  (A0)+,D0
+            bsr.w   New_SetDateTime2
+            move.b  D0,(1,SP)
+            move.w  (A0)+,D0
+            bsr.w   New_SetDateTime2
+            move.b  D0,(0,SP)
+            move.w  (A0)+,D0
+            bsr.w   New_SetDateTime2
+            move.b  D0,(3,SP)
+            movea.l SP,A0
+            move.w  #7,D1
+            move.w  #$20,D0
+            bsr.w   CommonUnknown2
+            adda.w  #$16,SP
+            movem.l (SP)+,D1/A0-A1
+            rts
 New_ReadDateTime:
+            movem.l A1/D1,-(SP)
+            move.l  A0,-(SP)
+            suba.w  #$18,SP
+            movea.l SP,A0
+            move.w  #7,D1
+            move.w  #$20,D0
+            bsr.w   CommonUnknown1
+            movea.l SP,A1
+            lea     (8,SP),A0
+
+
 New_SetDateTime2:
 New_ReadDateTime2:
+CommonUnknown2:
+CommonUnknown1:
+ReplaceTraps_Unknown1:
+CommonUnknown3:
 New_ReadXPRam:
 New_WriteXPRam:
+PatchInitIOMgr8:
 ; I'm fairly certain this is the step that draws the Wallaby logo on the Outbound's
 ; screen, but I'm not entirely sure.
 DrawWallaby:
@@ -1264,33 +1483,33 @@ Super_Unknown_PostEvent:
             _PostEvent
             move.w  D0,(SP)
             jmp     (A1)
-Super_Unknown22:
-            movea.l (SP)+,A1
-            movea.l (SP)+,A0
-            move.l  A1,-(SP)
+Super_PBOffLine:
+            movea.l (SP)+,A1                        ; Get return address
+            movea.l (SP)+,A0                        ; Get param pointer
+            move.l  A1,-(SP)                        ; Put return address back on the stack
             _OffLine
-            move.w  D0,(4,SP)
+            move.w  D0,(4,SP)                       ; Save result
             rts
 Super_Unknown21:
-            movea.l (SP)+,A0
-            move.w  (SP)+,D0
+            movea.l (SP)+,A0                        ; Get return address
+            move.w  (SP)+,D0                        ; Get refNum
             addq.w  #1,D0
             neg.w   D0
             lsl.w   #2,D0
             movea.l UTableBase,A1
-            move.l  (A1,D0),(SP)
+            move.l  (A1,D0.w),(SP)
             jmp     (A0)
-Super_Unknown_BlockMove:
-            move.l  (SP)+,D1
-            move.l  (SP)+,D0
-            movea.l (SP)+,A1
-            movea.l (SP)+,A0
+Super_BlockMove:
+            move.l  (SP)+,D1                        ; Get return address
+            move.l  (SP)+,D0                        ; Get byte count
+            movea.l (SP)+,A1                        ; Get destination pointer
+            movea.l (SP)+,A0                        ; Get source pointer
             _BlockMove
-            movea.l D1,A1
-            move.l  A1,-(SP)
+            movea.l D1,A1                           ; Restore return address
+            move.l  A1,-(SP)                        ; Put return address back on the stack
             move.w  D0,MemErr
             rts
-Super_Unknown28:
+Super_NewPtr:
             movea.l (SP)+,A1
             move.l  (SP)+,D0
             _NewPtr
@@ -1339,7 +1558,31 @@ RAMDisk_Open:
             beq.b   .Exit
             moveq   #4,D0
             move.l  D0,-(SP)
-
+            move.b  ($13C,A2),D0
+            mulu.w  #$1FF,D0
+            clr.l   -(SP)
+            move.l  D0,-(SP)
+            move.w  ($18,A1),D0
+            ext.w   D0
+            move.l  D0,-(SP)
+            bsr.w   Shared_Unknown2
+            move.w  D0,($13A,A2)
+            lea     ($10,SP),SP
+            btst.b  #5,(4,A1)
+            move.w  #1,($22,A1)
+            move.l  #$11A,D0
+            _NewPtrSys
+            movea.l (8,SP),A1
+            move.l  A0,($14,A1)
+            lea     RAMDisk_Data1,A1
+            jsr     Shared_Unknown1
+            move.w  #$19,D0
+.L1:
+            move.b  (A1)+,(A0)+
+            dbf     D0,.L1
+            movem.l (SP)+,A0-A1/D0
+            clr.w   ($10,A0)
+            rts
 .Exit:
             movem.l (SP)+,D0/A0-A1
             move.w  #$FFE9,($10,A0)
@@ -1348,7 +1591,9 @@ RAMDisk_Close:
             clr.w   D0
             rts
 RAMDisk_Prime:
+
 RAMDisk_Ctl:
+
 RAMDisk_Status:
             move.w  #-$12,D0
             cmpi.w  #8,($1A,A0)
@@ -1688,13 +1933,3 @@ Super_Unknown4:
 Super_Unknown3:
 Super_Unknown5:
 RamDisk_Unknown1:
-PatchLineA_Unknown2:
-PatchLineA_Unknown3:
-PatchInitIOMgr8:
-PatchLineA_L24_2:
-
-
-
-
-
-
