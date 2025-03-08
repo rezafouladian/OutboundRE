@@ -1796,6 +1796,10 @@ Super_Unknown10:
 .Exit:
             movem.l (SP)+,D0-D7/A0-A6
             rts
+; 
+;   Inputs:
+;
+;   Outputs:    D0  Result
 Super_Unknown12:
             link.w  A6,#0
             movem.l A0/D2-D1,-(SP)
@@ -1812,15 +1816,15 @@ Super_Unknown12:
             subq.l  #1,D1
             bne.b   .L2
 .L3:
-            moveq   #0,D0
-            bra.b   .L5
+            moveq   #0,D0                           ; Return 0
+            bra.b   .Exit
 .L4:
             btst.l  #6,D2
             bne.b   .L3
             move.b  (A0)+,$C8001A
             dbf     D0,.L1
-            moveq   #1,D0
-.L5:
+            moveq   #1,D0                           ; Return 1
+.Exit:
             movem.l (SP)+,D1-D2/A0
             unlk    A6
             rts
@@ -1879,7 +1883,7 @@ Super_Unknown29:
             movem.l (SP)+,D1-D3/A0-A2
             unlk    A6
             rts
-Super_0028e476:
+Super_476:
             link.w  A6,#0
             movem.l A2-A0/D3-D1,-(SP)
             movea.l #$C80018,A0
@@ -1908,7 +1912,7 @@ Super_0028e476:
             movem.l (SP)+,D1-D3/A0-A2
             unlk    A6
             rts
-Super_0028e4c0:
+Super_4C0:
             movem.l A4-A3/D7,-(SP)
             movem.l ($10,SP),D7/A3-A4
             exg     D7,A4
@@ -1922,6 +1926,148 @@ Super_0028e4c0:
 .L2:
             movem.l (SP)+,D7/A3-A4
             rts
+Super_4DE:
+            movem.l A4-A2/D7-D2/D1,-(SP)
+            moveq   #1,D1
+            moveq   #2,D2
+            move.l  D1,-(SP)
+            bsr.w   Super_Unknown14
+            move.l  #-$F800,(SP)
+            lea     (2,SP),A4
+            movea.l SP,A3
+            move.w  #$700,-(SP)
+            movea.l SP,A2
+            bsr.b   Super_540
+            tst.w   D0
+            beq.b   .L3
+            move.w  #$270F,D7
+.L1:
+            move.l  D1,-(SP)
+            move.l  A4,-(SP)
+            bsr.w   Super_Unknown12
+            addq.l  #8,SP
+            tst.w   D0
+            beq.b   .L3
+            move.l  D2,-(SP)
+            move.l  A3,-(SP)
+            bsr.w   Super_Unknown13
+            addq.l  #8,SP
+            cmpi.w  #$2000,(A3)
+            beq.b   .L4
+            btst.b  #4,(A3)
+            beq.b   .L2
+            bsr.b   Super_540
+.L2:
+            dbf     D7,.L1
+.L3:
+            moveq   #0,D0
+            bra.b   .L5
+.L4:
+            moveq   #1,D0
+.L5:
+            addq.l  #6,SP
+            movem.l (SP)+,D1-D2/D7/A2-A4
+            rts
+Super_540:
+            move.l  D2,-(SP)
+            move.l  A2,-(SP)
+            bsr.w   Super_Unknown12
+            addq.l  #8,SP
+            rts
+Super_54C:
+            link.w  A6,#-$10
+            movem.l A5-A2/D7-D3,-(SP)
+            move.l  (8,A6),D3
+            movea.l OutboundGlobals,A2
+            moveq   #1,D7
+            move.l  D7,-(SP)
+            jsr     Super_Unknown11
+            addq.l  #4,SP
+            tst.w   D0
+            bne.b   .L1
+            moveq   #-$41,D0
+            bra.w   .L19
+.L1:
+            moveq   #1,D0
+            move.b  ($2E,A2),D0
+            move.l  D0,-(SP)
+            jsr     Super_Unknown14
+            addq.l  #4,SP
+            tst.w   D0
+            bne.b   .L2
+            moveq   #-$50,D0
+            bra.w   .L19
+.L2:
+            moveq   #5,D4
+            tst.b   ($3A,A2)
+            beq.b   .L11
+.L3:
+            lea     (-$10,A6),A5
+            moveq   #$45,D0
+            cmp.b   ($3D,A2),D7
+            beq.b   .L4
+            addi.b  #-$80,D0
+.L4:
+            cmp.b   D3,D7
+            beq.b   .L5
+            addq.b  #1,D0
+.L5:
+            move.b  D0,(A5)+
+            clr.b   (A5)+
+            move.b  ($2E,A2),(A5)+
+            clr.b   (A5)+
+            move.b  D7,(A5)+
+            move.b  #2,(A5)+
+            move.b  ($3C,A2),(A5)+
+            move.b  ($3B,A2),(A5)+
+            move.b  #-1,(A5)+
+            moveq   #9,D0
+            move.l  D0,-(SP)
+            pea     (-$10,A6)
+            jsr     Super_Unknown12
+            addq.l  #8,SP
+            tst.w   D0
+            bne.b   .L6
+            moveq   #-$47,D0
+            bra.w   .L19
+.L6:
+            move.l  ($2A,A2),-(SP)
+            move.l  ($26,A2),-(SP)
+            cmp.b   D3,D7
+            bne.b   .L7
+            jsr     Super_Unknown29
+            bra.b   .L8
+.L7:
+            jsr     Super_476
+.L8:
+            addq.l  #8,SP
+            moveq   #7,D0
+            move.l  D0,-(SP)
+            move.l  A5,-(SP)
+            jsr     Super_Unknown13
+            addq.l  #8,SP
+            tst.w   D0
+            bne.b   .L9
+            moveq   #-$49,D0
+            bra.w   .L19
+.L9:
+            btst.b  #0,(1,A5)
+            beq.b   .L10
+            moveq   #-$43,D0
+            bra.w   .L19
+.L10:
+            moveq   #$44,D0
+            cmp.b   (A5)+,D0
+            bne.w   .L15
+            moveq   #-$80,D0
+            cmp.b   (A5)+,D0
+            bne.w   .L15
+            moveq   #0,D0
+            cmp.b   (A5)+,D0
+            bne.w   .L15
+
+
+
 
             
 ;temp
@@ -1933,3 +2079,71 @@ Super_Unknown4:
 Super_Unknown3:
 Super_Unknown5:
 RamDisk_Unknown1:
+Unknown_DFA:
+            link.w  A6,#0
+            movem.l A4-A2/D6-D3,-(SP)
+            move    SR,-(SP)
+            move    #$2300,SR
+            movea.l #$900000,A0
+            movea.l #$B0000D,A1
+            lea     Super_UnknownData5,A2
+            moveq   #0,D7
+            movea.l OutboundGlobals,A3
+            move.b  ($3C,A3),D7
+            cmpi.b  #$B,D7
+            blt.b   .L1
+            lea     Data_F8C,A4
+            bra.b   .L3
+.L1:
+            cmpi.b  #$9,D7
+            blt.b   .L2
+            lea     Data_F98,A4
+            bra.b   .L3
+.L2:
+            lea     Data_FA2,A4
+.L3:
+            subq.l  #1,D7
+            moveq   #0,D4
+            move.b  ($B,A6),D4
+            lsl.b   #5,D4
+            moveq   #0,D3
+            move.b  ($2E,A3),D3
+            btst.l  #6,D3
+            beq.b   .L4
+            andi.b  #$3F,D3
+            ori.b   #1,D4
+            moveq   #0,D1
+.L4:
+            move.b  #5,$B00001
+            move.b  #$6A,$B00001
+            bclr.b  #5,$E0FFFE
+
+Unknown_F56:
+            moveq   #-1,D0
+.L1:
+            btst.b  #2,(A0)
+            dbne    D0,.L1
+            beq.b   .L2
+            move.b  D1,(A1)
+            rts
+.L2:
+            addq.l  #4,SP
+            moveq   #0,D0
+.L3:
+            bset.b  #5,$E0FFFE
+            move.b  #5,$B00001
+            move.b  #$62,$B00001
+            move    (SP)+,SR
+            movem.l (SP)+,D3-D7/A2-A4
+            unlk    A6
+            rts
+Data_F8C:
+            dc.b    0,6,1,7,2,8,3,9,4,10,5,11
+Data_F98:
+            dc.b    0,5,1,6,2,7,3,8,4,9
+Data_FA2:
+            dc.b    0,4,1,5,2,6,3,7
+Data_FAA:
+            dc.b    255,252,243,207,63,255
+Data_FB0:
+            dc.b    171,85,105,181,123,85
