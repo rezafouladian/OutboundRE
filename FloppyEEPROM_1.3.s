@@ -535,10 +535,10 @@ PatchInitIOMgr3:
 PatchInitIOMgr2:
             andi.w  #$7FFF,(SP)
             movem.l A1-A0/D2-D0,-(SP)
-            movea.l LineAVector,A0
-            move.l  A0,-(SP)
+            movea.l LineAVector,A0                  ; Get the current LineA vector
+            move.l  A0,-(SP)                        ; Save it for later
             move.l  ($6,A0),LineAVector             ; Skip the first instruction
-            movea.l #$CC0010,A0
+            movea.l #OutboundFlpBase+$40010,A0
             lea     (-$8,A0),A1
             moveq   #-128,D0
             moveq   #0,D1
@@ -548,8 +548,8 @@ PatchInitIOMgr2:
             move.b  (A1),D2
             move.b  D1,(A1)
             move.b  #$14,(A0)
-            movea.l #$C80018,A0
-            moveq   #7,D0
+            movea.l #OutboundFlpBase+18,A0
+            moveq   %00000111,D0
             btst.b  D0,(A0)
             bne.b   .L2
             moveq   #30,D1
@@ -1542,11 +1542,11 @@ RAMDisk_Driver:
             dc.w    $0
             dc.w    $0
             dc.w    $0
-            dc.w    RAMDisk_Driver-RAMDisk_Open
-            dc.w    RAMDisk_Driver-RAMDisk_Prime
-            dc.w    RAMDisk_Driver-RAMDisk_Ctl
-            dc.w    RAMDisk_Driver-RAMDisk_Status
-            dc.w    RAMDisk_Driver-RAMDisk_Close
+            dc.w    RAMDisk_Open-RAMDisk_Driver
+            dc.w    RAMDisk_Prime-RAMDisk_Driver
+            dc.w    RAMDisk_Ctl-RAMDisk_Driver
+            dc.w    RAMDisk_Status-RAMDisk_Driver
+            dc.w    RAMDisk_Close-RAMDisk_Driver
 RAMDisk_Name:
             dc.b    5
             dc.b    ".RAMd"
@@ -1591,16 +1591,379 @@ RAMDisk_Close:
             clr.w   D0
             rts
 RAMDisk_Prime:
+            move.l  ($10,A1),D0
+            move.l  D0,D4
+            moveq   #9,D2
+            lsr.l   D2,D0
+            move.l  ($24,A0),D1
+            lsr.l   D2,D1
+            movea.l ($20,A0),A3
+            bclr.b  #5,($4,A1)
+            bsr.b   RamDisk_Unknown10
+            add.l   ($24,A0),D4
+            move.l  D4,($10,A1)
+            move.l  ($24,A0),($28,A0)
+            btst.b  #1,(6,A0)
+            bne.b   .Exit
+            move.l  (JIODone),-(SP)
+.Exit:
+            move.l  D7,D0
+            rts
+RamDisk_Unknown10:
+            link.w  A6,#-$14
+            movem.l A6-A0/D6-D0,-(SP)
+            moveq   #0,D7
+            clr.b   (-2,A6)
+            move.w  (6,A0),D2
+            andi.w  #$F,D2
+            cmpi.w  #$2,D2
+            beq.b   .L1
+            bset.b  #1,(-2,A6)
+            bra.b   .L2
+.L1:
+            btst.b  #6,($2D,A0)
+            bne.b   .L2
+            bset.b  #0,(-2,A6)
+.L2:
+            movea.l OutboundGlobals,A2
+            adda.w  #$FA,A2
+            move.w  D0,(-4,A6)
+            move.w  D1,(-6,A6)
+            move.l  A3,(-$E,A6)
+            movea.l A3,A0
+            move.w  D0,D3
+            ext.l   D3
+            divs.w  #$1FF,D3
+            swap    D3
+            move.l  D3,(-$A,A6)
+            swap    D3
+            ext.l   D3
+            clr.w   D0
+            clr.w   D1
+            clr.w   D2
+.L3:
+            move.w  #$F,D4
+            and.b   (A2,D0.w),D4
+            beq.b   .L4
+            add.w   D4,D1
+            cmp.w   D3,D1
+            bhi.b   .L5
+            move.w  D1,D2
+.L4:
+            addq.w  #1,D0
+            cmpi.w  #$10,D0
+            bne.b   .L3
+            bra.w   .L19
+.L5:
+            sub.w   D2,D3
+            move.w  D3,D1
+            move.b  (A2,D0.w),D2
+            lsr.b   #4,D2
+            move.b  #3,D3
+            and.w   D2,D3
+            move.b  (.L6,PC,D3.w),D4
+            bra.b   .L7
+.L6:
+            dc.b    0
+            dc.b    1
+            dc.b    1
+            dc.b    2
+.L7:
+            sub.w   D4,D1
+            blt.b   .L8
+            bset.b  #4,(-2,A6)
+            lsr.b   #2,D2
+            bra.b   .L9
+.L8:
+            add.w   D4,D1
+.L9:
+            andi.w  #3,D2
+            cmpi.w  #3,D2
+            bne.b   .L10
+            tst.w   D1
+            beq.b   .L10
+            addi.w  #$1FF,(-$A,A6)
+.L10:
+            move.w  D0,(-$10,A6)
+            bsr.w   RamDiskUnknown2
+            movea.l #RAMDiskBase,A1
+            clr.w   D2
+            move.b  (A2,D0.w),D2
+            lsr.b   #4,D2
+            btst.b  #4,(-2,A6)
+            beq.b   .L11
+            lsr.b   #2,D2
+            adda.l  #$80000,A1
+.L11:
+            clr.w   D3
+            andi.b  #3,D2
+            beq.b   .L18
+            move.b  (.L6,PC,D2.w),D3
+            add.w   D3,(-$A,A6)
+            bclr.b  #2,(-2,A6)
+            move.w  #$200,D3
+            cmpi.b  #3,D2
+            bne.b   .L12
+            bset.b  #2,(-2,A6)
+            move.w  #$400,D3
+            bra.b   .L13
+.L12:
+            cmpi.w  #1,D2
+            beq.b   .L13
+            addq.w  #1,A1
+.L13:
+            move.w  (-$A,A6),D6
+            add.w   (-6,A6),D6
+            cmp.w   D6,D3
+            bhi.b   .L14
+            move.w  D3,D6
+            sub.w   (-$A,A6),D6
+            bra.b   .L15
+.L14:
+            move.w  (-6,A6),D6
+.L15:
+            sub.w   D6,(-6,A6)
+            move.w  D6,(-8,A6)
+            btst.b  #2,(-2,A6)
+            bne.b   .L16
+            bsr.b   RamDisk_Unknown9
+            bra.b   .L17
+.L16:
+            bsr.w   RamDisk_Unknown7
+.L17:
+            tst.l   D7
+            bne.b   .Exit
+            tst.w   (-6,A6)
+            beq.b   .Exit
+.L18:
+            clr.w   (-$A,A6)
+            move.w  (-10,A6),D0
+            bchg.b  #4,(-2,A6)
+            beq.w   .L10
+            addq.w  #1,D0
+            cmpi.w  #10,D0
+            beq.b   .L19
+            bra.w   .L10
+.L19:
+            moveq   #-$24,D7
+.Exit:
+            movem.l (SP)+,D0-D6/A0-A6
+            unlk    A6
+            rts
+RamDisk_Unknown9:
+            moveq   #0,D0
+
+
+
+RamDisk_Unknown8:
+            moveq   #-$44,D7
+            rts
+RamDisk_Unknown7:
+            move.w  #9,D6
+
+
+RamDisk_Unknown5:
+
+
 
 RAMDisk_Ctl:
-
+            clr.w   D0
+            cmpi.w  #$41,($1A,A0)
+            beq.b   .L1
+            cmpi.w  #$5,($1A,A0)
+            beq.b   .L4
+            cmpi.w  #$6,($1A,A0)
+            beq.b   .L5
+            cmpi.w  #$7,($1A,A0)
+            beq.b   .L9
+            cmpi.w  #$15,($1A,A0)
+            beq.b   .L11
+            cmpi.w  #$16,($1A,A0)
+            beq.b   .L11
+            cmpi.w  #$17,($1A,A0)
+            beq.b   .L11
+            move.w  #-$11,D0
+            bra.w   .L12
+.L1:
+            movem.l A1-A0/D0,-(SP)
+            bclr.b  #5,(4,A1)
+            tst.w   SysEvtMask
+            bne.b   .L2
+            bste.b  #5,(4,A1)
+            move.w  #$3C,($22,A1)
+            bra.b   .L3
+.L2:
+            movea.w #7,A0
+            movea.l OutboundGlobals,A1
+            moveq   #0,D0
+            move.w  ($13A,A1),D0
+            _PostEvent
+.L3:
+            movem.l (SP)+,D0/A0-A1
+            bra.w   .L12
+.L4:
+            bra.w   .L12
+.L5:
+            movem.l A1-A0/D1-D0,-(SP)
+            move.w  #$F,D0
+            moveq   #0,D1
+            lea     OutboundDisp,A1
+            bset.b  #5,OutboundVIA+vDIRB
+            bclr.b  #5,OutboundVIA+vBufB
+.L6:
+            bsr.w   RamDisk_Unknown2
+            lea     RAMDiskBase,A0
+            clr.w   (A0)
+            tst.b   (A0)
+            beq.b   .L7
+            tst.b   (1,A0)
+            bne.b   .L8
+.L7:
+            move.l  D1,(A0)+
+            move.l  D1,(A0)+
+            move.l  D1,(A0)+
+            move.l  D1,(A0)+
+            cmpa.l  A0,A1
+            bne.b   .L7
+.L8:
+            dbf     D0,.L6
+            bset.b  #5,OutboundVIA+vBufB
+            movem.l (SP)+,D0-D1/A0-A1
+            bra.b   .L12
+.L9:
+            btst.b  #CfgBit5,OutboundCfg
+            beq.b   .L10
+            bset.b  #5,(4,A1)
+            move.w  #$1E,($22,A1)
+            move.w  #-$11,D0
+            bra.b   .L12
+.L10:
+            clr.w   D0
+            bra.b   .L12
+.L11:
+            move.l  ($14,A1),($1C,A0)
+            bra.b   .L12
+            move.l  #$602,($1C,A0)
+.L12:
+            btst.b  #1,(6,A0)
+            bne.b   .Exit
+            move.l  JIODone,-(SP)
+.Exit:
+            rts
 RAMDisk_Status:
             move.w  #-$12,D0
             cmpi.w  #8,($1A,A0)
             bne.b   .L1
             lea     ($1C,A0),A2
+            clr.w   (A2)
+            clr.b   (2,A2)
+            move.b  #1,(3,A2)
+            move.b  #1,(4,A2)
+            move.w  ($16,A0),($C,A2)
+            move.w  ($18,A0),($E,A2)
+            clr.w   ($10,A2)
+            clr.w   ($14,A2)
+            clr.w   D0
 .L1:
-
+            btst.b  #1,(6,A0)
+            move.l  JIODone,-(SP)
+            rts
+RAMDisk_Data1:
+            incbin  'bin/RAMDisk_Data1.bin'
+            dc.b    21
+            dc.b    'Outbound Silicon Disk'
+RamDisk_Unknown2:
+            move.b  D0,$500001
+            ror.b   #1,D0
+            move.b  D0,$500003
+            ror.b   #1,D0
+            move.b  D0,$500005
+            ror.b   #1,D0
+            move.b  D0,$500007
+            ror.b   #3,D0
+            rts
+RamDisk_Unknown1:
+            bset.b  #5,OutboundVIA+vDIRB
+            bclr.b  #5,OutboundVIA,vBufB
+            movem.l A4-A0/D3-D0,-(SP)
+            movea.l RAMDiskBase,A0
+            movea.l RAMDiskBase+$80000,A1
+            movea.l OutboundGlobals,A2
+            movea.l A2,A4
+            adda.w  #$FA,A4
+            clr.w   D0
+.L1:
+            bsr.b   RamDisk_Unknown2
+            move.w  (A0),-(SP)
+            move.w  (A1),-(SP)
+            clr.w   (A0)
+            clr.w   (A1)
+            clr.b   (A4,D0.w)
+            addq.w  #1,D0
+            cmpi.w  #$10,D0
+            bne.b   .L1
+            clr.w   D1
+            clr.w   D2
+            movea.l A0,A3
+.L2:
+            clr.w   D0
+.L3:
+            bsr.b   RamDisk_Unknown2
+            tst.b   (A3)
+            bne.b   .L4
+            subq.b  #1,(A3)
+            bpl.b   .L4
+            bset.b  D1,(A4,D0.w)
+            addq.w  #1,D2
+.L4:
+            addq.w  #1,D0
+            cmpi.w  #$10,D0
+            bne.b   .L3
+            addq.w  #1,D1
+            btst.l  #0,D1
+            beq.b   .L5
+            addq.l  #1,A3
+            bra.b   .L2
+.L5:
+            cmpi.w  #2,D1
+            bne.b   .L6
+            movea.l A1,A3
+            bra.b   .L2
+.L6:
+            move.b  D2,($13C,A2)
+            clr.w   D2
+            moveq   #$F,D0
+.L7:
+            bsr.w   RamDisk_Unknown2
+            move.b  (A4,D0.w),D2
+            move.b  (.L8,PC,D2.w),D2
+            move.b  D2,(A4,D0.w)
+            move.w  (SP)+,(A1)
+            move.w  (SP)+,(A0)
+            dbf     D0,.L7
+            movem.l (SP)+,D0-D3/A0-A4
+            bset.b  #5,OutboundVIA+vBufB
+            rts
+.L8:
+            dc.b    $0
+            dc.b    $11
+            dc.b    $21
+            dc.b    $32
+            dc.b    $41
+            dc.b    $52
+            dc.b    $62
+            dc.b    $73
+            dc.b    $81
+            dc.b    $92
+            dc.b    $A2
+            dc.b    $B3
+            dc.b    $C2
+            dc.b    $D3
+            dc.b    $E3
+            dc.b    $F4
+Super_Unknown5:
+            link.w  A6,#-4
+            
 Super_Unknown15:
 
 Super_Unknown14:
