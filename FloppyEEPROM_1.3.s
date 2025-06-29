@@ -1143,8 +1143,8 @@ PatchInitIOMgr4:
             move.w  (A1)+,(A2)
             bra.b   .L4
 .L5:
-            lea     .L5,A0
-            move.w  #$33,D0
+            lea     .L6,A0
+            move.w  #$33,D0                         ; _VInstall?
             _SetToolBoxTrapAddress
             move.l  #OutboundDisp,ScrnBase
             move.w  #80,ScreenRow
