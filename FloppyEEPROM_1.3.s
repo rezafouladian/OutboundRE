@@ -1201,7 +1201,7 @@ New_InitUtil:
             lea     SPValid,A0
             move.w  #$14,D1
             clr.w   D0
-            bsr.w   CommonUnknown1
+            bsr.w   PRAMReadOp
             cmpi.b  #-$58,SPValid
             beq.b   .L3
             lea     SPValid,A1
@@ -1230,11 +1230,11 @@ New_WriteParam:
             movem.l A1-A0/D1,-(SP)
             move.w  #$14,D1
             clr.w   D0
-            bsr.w   CommonUnknown2
+            bsr.w   PRAMWriteOp
             lea     Scratch20,A0
             move.w  #$14,D1
             clr.w   D0
-            bsr.w   CommonUnknown1
+            bsr.w   PRAMReadOp
             moveq   #0,D0
             movem.l (SP)+,D1/A0-A1
             rts
@@ -1270,7 +1270,7 @@ New_SetDateTime:
             movea.l SP,A0
             move.w  #7,D1
             move.w  #$20,D0
-            bsr.w   CommonUnknown2
+            bsr.w   PRAMWriteOp
             adda.w  #$16,SP
             movem.l (SP)+,D1/A0-A1
             rts
@@ -1281,22 +1281,254 @@ New_ReadDateTime:
             movea.l SP,A0
             move.w  #7,D1
             move.w  #$20,D0
-            bsr.w   CommonUnknown1
+            bsr.w   PRAMReadOp
             movea.l SP,A1
             lea     (8,SP),A0
+            move.b  (6,A1),D0
+            bsr.b   New_ReadDateTime2
+            addi.w  #$76C,D0
+            move.w  D0,(A0)+
 
 
 New_SetDateTime2:
+            movem.l D1,-(SP)
+            move.w  D0,D1
+            ext.l   D1
+            divu.w  #$A,D1
+            swap    D1
+            move.w  D1,D0
+            swap    D1
+            ext.l   D1
+            divu.w  #$A,D1
+            swap    D1
+            asl.w   #4,D1
+            or.w    D1,D0
+            movem.l (SP)+,D1
+            rts
 New_ReadDateTime2:
-CommonUnknown2:
-CommonUnknown1:
+            movem.l D1,-(SP)
+            move.b  D0,D1
+            andi.w  #$F0,D1
+            asr.w   #4,D1
+            mulu.w  #$A,D1
+            andi.w  #$F,D0
+            add.w   D1,D0
+            movem.l (SP)+,D1
+            rts
+PRAMWriteOp:
+            move    SR,-(SP)
+            ori     #$300,SR
+            movea.l A0,A1
+            lea     OutboundVIA,A0
+            ori.b   #7,(vDIRB,A0)
+            bclr.b  #1,(vBufB,A0)
+            bset.b  #2,(vBufB,A0)
+            ori.b   #$FF80,D0
+            bsr.b   ReplaceTraps_Unknown1
+            bra.b   .L2
+.L1:
+            move.b  (A1)+,D0
+            bsr.b   ReplaceTraps_Unknown1
+.L2:
+            dbf     D1,.L1
+            bset.b  #2,(vBufB,A0)
+            move    (SP)+,SR
+            rts
+PRAMReadOp:
+            move    SR,-(SP)
+            ori     #$300,SR
+            movea.l A0,A1
+            lea     OutboundVIA,A0
+            ori.b   #7,(vDIRB,A0)
+            bclr.b  #1,(vBufB,A0)
+            bset.b  #2,(vBufB,A0)
+            andi.b  #$3F,D0
+            bsr.b   ReplaceTraps_Unknown1
+            bclr.b  #0,(vBufB,A0)
+            bra.b   .L2
+.L1:
+            bsr.b   CommonUnknown3
+            move.b  D0,(A1)+
+.L2:
+            dbf     D1,.L1
+            bset.b  #2,(vBufB,A0)
+            move    (SP)+,SR
+            rts
 ReplaceTraps_Unknown1:
+            movem.l D2-D0,-(SP)
+            moveq   #7,D2
+            andi.b  #$F8,(vBufB,A0)
+.L1:
+            asl.b   #1,D0
+            bcc.b   .L2
+            bset.b  #0,(vBufB,A0)
+            bra.b   .L3
+.L2:
+            bclr.b  #0,(vBufB,A0)
+.L3:
+            bset.b  #1,(vBufB,A0)
+            bclr.b  #1,(vBufB,A0)
+            dbf     D2,.L1
+            movem.l (SP)+,D0-D2
+            rts
 CommonUnknown3:
+            movem.l D3-D1,-(SP)
+            moveq   #7,D2
+            andi.b  #$F8,(vBufB,A0)
+.L1:
+            asl.b   #1,D0
+            bset.b  #1,(vBufB,A0)
+            move.b  (vBufB,A0),D3
+            andi.b  #1,D3
+            or.b    D3,D0
+            bclr.b  #1,(vBufB,A0)
+            dbf     D2,.L1
+            movem.l (SP)+,D1-D3
+            rts
+; New_ReadXPRam
+;
+; This replaces the _ReadXPRam trap.
 New_ReadXPRam:
+            movem.l A2-A0/D2-D0,-(SP)
+            swap    D0
+            move.w  D0,D1
+            swap    D0
+            cmpi.w  #$7C,D0                         ; Sound?
+            beq.b   .L4
+            cmpi.w  #$08,D0
+            beq.b   .L3
+            cmpi.w  #$78,D0                         ; Startup device?
+            beq.b   .L5
+            cmpi.w  #$E0,D0
+            beq.b   .L7
+            subq.w  #1,D1
+.L1:
+            clr.b   (A0)+
+            dbf     D1,.L1
+.Exit:
+            movem.l (SP)+,D0-D2/A0-A2
+            rts
+.L3:
+            move.w  #$10,D0
+            move.w  #1,D1
+            bra.b   .DoRead
+.L4:
+            move.w  #$14,D0
+            bra.b   .DoRead
+.L5:
+            move.w  #$16,D0
+            bra.b   .DoRead
+.L7:
+            move.w  #$1A,D0
+.DoRead:
+            bsr.w   PRAMReadOp
+            bra.b   .Exit
 New_WriteXPRam:
+            movem.l A2-A0/D2-D0,-(SP)
+            swap    D0
+            move.w  D0,D1
+            swap    D0
+            cmpi.w  #$7C,D0                         ; Sound?
+            beq.b   .L2
+            cmpi.w  #$08,D0
+            beq.b   .L1
+            cmpi.w  #$78,D0                         ; Startup device?
+            beq.b   .L3
+            cmpi.w  #$E0,D0
+            beq.b   .L4
+.Exit:
+            movem.l (SP)+,D0-D2/A0-A2
+            rts
+.L1:
+            move.w  #$10,D0
+            move.w  #1,D1
+            bra.b   .DoWrite
+.L2:
+            move.w  #$14,D0
+            bra.b   .DoWrite
+.L3:
+            move.w  #$16,D0
+            bra.b   .DoWrite
+.L4:
+            move.w  #$1A,D0
+.DoWrite:
+            bsr.w   PRAMWriteOp
+            bra.b   .Exit
+CommonUnknown4:
+            movea.l OutboundGlobals,A1
+            move.b  OutboundVIA+vSR,D1
+            move.b  #$10,OutboundVIA+vIFR
+            clr.b   ($6D,A1)
+            move.b  ($68,A1),D0
+            btst.l  #0,D0
+            bne.w   CommonUnknown18
+            tst.b   D1
+            beq.b   .L1
+            bpl.b   .L4
+.L1:
+            btst.l  #1,D0
+            bne.b   CommonUnknown19
+            bclr.b  #2,($68,A1)
+            beq.b   .L2
+            rts
+.L2:
+            move.b  D1,($6A,A1)
+            bset.b  #1,($68,A1)
+            move    SR,D0
+            andi.w  #$700,D0
+            cmpi.w  #$700,D0
+            bne.b   .L5
+            move.l  Ticks,($64,A1)
+            move.w  #$4000,D0
+.L3:
+            btst.b  #2,OutboundVIA+vIFR
+            bne.b   CommonUnknown4
+            dbf     D0,.L3
+            bra.b   CommonUnknown5
+.L4:
+            move.b  D1,($69,A1)
+            bset.b  #0,($68,A1)
+.L5:
+            move.l  Ticks,($64,A1)
+            rts
+CommonUnknown5:
+            move.w  #$FFFF,D0
+.L1:
+            dbf     D0,.L1
+            movea.l OutboundGlobals,A1
+            addq.w  #1,($A8,A1)
+            tst.w   ($34,A1)
+            bne.b   .L2
+            move    SR,D0
+            andi.w  #$700,D0
+            cmpi.w  #$700,D0
+            bne.b   .L3
+.L2:
+            bsr.w   CommonUnknown15
+.L3:
+            bsr.w   CommonUnknown17
+            bclr.b  #0,($68,A1)
+            bclr.b  #1,($68,A1)
+            bchg.b  #7,OutboundDisp
+            rts
+CommonUnknown18:
+
+CommonUnknown6:
+
+CommonUnknown7:
+
+CommonUnknown19:
+
+CommonUnknown7_2:
+
+CommonUnknown8:
+
 PatchInitIOMgr8:
-; I'm fairly certain this is the step that draws the Wallaby logo on the Outbound's
-; screen, but I'm not entirely sure.
+
+; DrawWallaby
+;
+; Draws the Wallaby logo on the Outbound's built in display 
+; (regardless of whether a host Mac is connected or not)
 DrawWallaby:
             lea     .WallabyBitmap,A0
             movea.l #OutboundDisp+9335,A4
