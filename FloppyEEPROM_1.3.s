@@ -1288,8 +1288,33 @@ New_ReadDateTime:
             bsr.b   New_ReadDateTime2
             addi.w  #$76C,D0
             move.w  D0,(A0)+
-
-
+            move.b  (5,A1),D0
+            bsr.b   New_ReadDateTime2
+            move.w  D0,(A0)+
+            move.b  (4,A1),D0
+            bsr.b   New_ReadDateTime2
+            move.w  D0,(A0)+
+            move.b  (2,A1),D0
+            bsr.b   New_ReadDateTime2
+            move.w  D0,(A0)+
+            move.b  (1,A1),D0
+            bsr.b   New_ReadDateTime2
+            move.w  D0,(A0)+
+            move.b  (0,A1),D0
+            bsr.b   New_ReadDateTime2
+            move.w  D0,(A0)+
+            move.b  (3,A1),D0
+            bsr.b   New_ReadDateTime2
+            move.w  D0,(A0)+
+            lea     (8,SP),A0
+            _DateToSeconds
+            move.l  D0,Time
+            adda.w  #$18,SP
+            movea.l (SP)+,A0
+            move.l  D0,(A0)
+            moveq   #0,D0
+            movem.l (SP)+,D1/A1
+            rts
 New_SetDateTime2:
             movem.l D1,-(SP)
             move.w  D0,D1
@@ -1315,6 +1340,9 @@ New_ReadDateTime2:
             add.w   D1,D0
             movem.l (SP)+,D1
             rts
+; PRAMWriteOp
+;
+; For writing to the 68HC68 RTC RAM
 PRAMWriteOp:
             move    SR,-(SP)
             ori     #$300,SR
@@ -1334,6 +1362,9 @@ PRAMWriteOp:
             bset.b  #2,(vBufB,A0)
             move    (SP)+,SR
             rts
+; PRAMReadOp
+;
+; For reading from the 68HC68 RTC RAM
 PRAMReadOp:
             move    SR,-(SP)
             ori     #$300,SR
@@ -1423,6 +1454,9 @@ New_ReadXPRam:
 .DoRead:
             bsr.w   PRAMReadOp
             bra.b   .Exit
+; New_WriteXPRam
+;
+; This replaces the _WriteXPRam trap.
 New_WriteXPRam:
             movem.l A2-A0/D2-D0,-(SP)
             swap    D0
@@ -1512,6 +1546,15 @@ CommonUnknown5:
             bchg.b  #7,OutboundDisp
             rts
 CommonUnknown18:
+            bsr.w   CommonUnknown14
+            move.b  D1,($6B,A1)
+            bclr.b  #0,($68,A1)
+            clr.b   D2
+            clr.b   D0
+            bsr.b   CommonUnknown6
+            move.b  ($69,A1),D1
+            bsr.b   CommonUnknown6
+            not.w   D0
 
 CommonUnknown6:
 
