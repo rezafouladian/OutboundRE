@@ -1188,9 +1188,9 @@ ReplaceTraps:
             bclr.b  #1,(vBufB,A0)
             bset.b  #2,(vBufB,A0)
             move.b  #-$4F,D0
-            bsr.b   ReplaceTraps_Unknown1
+            bsr.b   PRAMOp
             move.b  #-$4B,D0
-            bsr.b   ReplaceTraps_Unknown1
+            bsr.b   PRAMOp
             bset.b  #2,(vBufB,A0)
             movem.l (SP)+,D0-D2/A0-A1
             rts
@@ -1343,6 +1343,10 @@ New_ReadDateTime2:
 ; PRAMWriteOp
 ;
 ; For writing to the 68HC68 RTC RAM
+; 
+; Inputs    A0  Memory location to write data from
+;           D0  PRAM location to write to
+;           D1  Data length
 PRAMWriteOp:
             move    SR,-(SP)
             ori     #$300,SR
@@ -1351,12 +1355,12 @@ PRAMWriteOp:
             ori.b   #7,(vDIRB,A0)
             bclr.b  #1,(vBufB,A0)
             bset.b  #2,(vBufB,A0)
-            ori.b   #$FF80,D0
-            bsr.b   ReplaceTraps_Unknown1
+            ori.b   #$FF80,D0                       ; Write addresses start at $80
+            bsr.b   PRAMOp
             bra.b   .L2
 .L1:
             move.b  (A1)+,D0
-            bsr.b   ReplaceTraps_Unknown1
+            bsr.b   PRAMOp
 .L2:
             dbf     D1,.L1
             bset.b  #2,(vBufB,A0)
@@ -1365,6 +1369,10 @@ PRAMWriteOp:
 ; PRAMReadOp
 ;
 ; For reading from the 68HC68 RTC RAM
+;
+; Inputs    A0  Memory location to save read data to
+;           D0  PRAM location to read from
+;           D1  Data length
 PRAMReadOp:
             move    SR,-(SP)
             ori     #$300,SR
@@ -1374,18 +1382,22 @@ PRAMReadOp:
             bclr.b  #1,(vBufB,A0)
             bset.b  #2,(vBufB,A0)
             andi.b  #$3F,D0
-            bsr.b   ReplaceTraps_Unknown1
+            bsr.b   PRAMOp
             bclr.b  #0,(vBufB,A0)
             bra.b   .L2
 .L1:
-            bsr.b   CommonUnknown3
+            bsr.b   PRAMReadOp2
             move.b  D0,(A1)+
 .L2:
             dbf     D1,.L1
             bset.b  #2,(vBufB,A0)
             move    (SP)+,SR
             rts
-ReplaceTraps_Unknown1:
+; PRAMOp
+;
+; Inputs:   A0  Outbound VIA base address
+;           D0  ?
+PRAMOp:
             movem.l D2-D0,-(SP)
             moveq   #7,D2
             andi.b  #$F8,(vBufB,A0)
@@ -1402,7 +1414,13 @@ ReplaceTraps_Unknown1:
             dbf     D2,.L1
             movem.l (SP)+,D0-D2
             rts
-CommonUnknown3:
+; PRAMReadOp2
+;
+; Inputs    A0  Outbound VIA base address
+;           D0
+;
+; Outputs   D0
+PRAMReadOp2:
             movem.l D3-D1,-(SP)
             moveq   #7,D2
             andi.b  #$F8,(vBufB,A0)
@@ -1419,6 +1437,11 @@ CommonUnknown3:
 ; New_ReadXPRam
 ;
 ; This replaces the _ReadXPRam trap.
+; Converts Macintosh PRAM addresses to locations in the 32 byte
+; range of the 68HC68.
+;
+; Inputs    A0  ?
+;           D0  Location and data length
 New_ReadXPRam:
             movem.l A2-A0/D2-D0,-(SP)
             swap    D0
@@ -1457,6 +1480,10 @@ New_ReadXPRam:
 ; New_WriteXPRam
 ;
 ; This replaces the _WriteXPRam trap.
+; Converts Macintosh PRAM addresses to locations in the 32 byte
+; range of the 68HC68.
+;
+; Inputs    D0  Location and data length
 New_WriteXPRam:
             movem.l A2-A0/D2-D0,-(SP)
             swap    D0
