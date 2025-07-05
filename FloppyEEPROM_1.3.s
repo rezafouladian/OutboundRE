@@ -1194,38 +1194,46 @@ ReplaceTraps:
             bset.b  #2,(vBufB,A0)
             movem.l (SP)+,D0-D2/A0-A1
             rts
+; New_InitUtil
+;
+; This replaces the _InitUtil trap.
+; Reads PRAM checking SPValid to see if PRAM data is valid,
+; and initilizes it if not.
+;
+; Outputs:  D0  Result code
 New_InitUtil:
-            movem.l A1-A0/D1,-(SP)
+            movem.l A1-A0/D1,-(SP)                  ; Save registers
             lea     Time,A0
             _ReadDateTime
-            lea     SPValid,A0
-            move.w  #$14,D1
+            lea     SysParam,A0                     ; Read to PRAM global space in RAM
+            move.w  #20,D1                          ; 20 bytes to read
             clr.w   D0
             bsr.w   PRAMReadOp
-            cmpi.b  #-$58,SPValid
+            cmpi.b  #$A8,SPValid                    ; Is clock data valid?
             beq.b   .L3
-            lea     SPValid,A1
-            btst.b  #IsMacSEROM,OutboundCfg
-            beq.b   .L1
-            movea.l #$40A0F8,A0
+            lea     SysParam,A1
+            btst.b  #IsMacSEROM,OutboundCfg         ; Do we have an SE ROM?
+            beq.b   .PlusROM
+            movea.l #$40A0F8,A0                     ; Default PRAM contents location on SE ROM
             bra.b   .L2
-.L1:
-            movea.l #$40FCAE,A0
+.PlusROM:
+            movea.l #$40FCAE,A0                     ; Default PRAM contents location on Plus ROM
 .L2:
-            moveq   #$14,D0
+            moveq   #20,D0
             _BlockMove
-            lea     SPValid,A0
+            lea     SysParam,A0
             move.l  MinusOne,D0
             _WriteParam
             moveq   #0,D0
             _SetDateTime
-            moveq   #-$58,D0
-            bra.b   .L4
+            moveq   #prInitErr,D0
+            bra.b   .Exit
 .L3:
             moveq   #0,D0
-.L4:
-            movem.l (SP)+,D1/A0-A1
+.Exit:
+            movem.l (SP)+,D1/A0-A1                  ; Restore registers
             rts
+; New_WriteParam
 New_WriteParam:
             movem.l A1-A0/D1,-(SP)
             move.w  #$14,D1
@@ -1352,7 +1360,7 @@ PRAMWriteOp:
             ori     #$300,SR
             movea.l A0,A1
             lea     OutboundVIA,A0
-            ori.b   #7,(vDIRB,A0)
+            ori.b   #%111,(vDIRB,A0)
             bclr.b  #1,(vBufB,A0)
             bset.b  #2,(vBufB,A0)
             ori.b   #$FF80,D0                       ; Write addresses start at $80
@@ -1378,7 +1386,7 @@ PRAMReadOp:
             ori     #$300,SR
             movea.l A0,A1
             lea     OutboundVIA,A0
-            ori.b   #7,(vDIRB,A0)
+            ori.b   #%111,(vDIRB,A0)
             bclr.b  #1,(vBufB,A0)
             bset.b  #2,(vBufB,A0)
             andi.b  #$3F,D0
@@ -1447,12 +1455,12 @@ New_ReadXPRam:
             swap    D0
             move.w  D0,D1
             swap    D0
-            cmpi.w  #$7C,D0                         ; Sound?
-            beq.b   .L4
+            cmpi.w  #$7C,D0                         ; Sound
+            beq.b   .SoundAddr
             cmpi.w  #$08,D0
             beq.b   .L3
-            cmpi.w  #$78,D0                         ; Startup device?
-            beq.b   .L5
+            cmpi.w  #$78,D0                         ; Default boot device
+            beq.b   .BootDevAddr
             cmpi.w  #$E0,D0
             beq.b   .L7
             subq.w  #1,D1
@@ -1466,10 +1474,10 @@ New_ReadXPRam:
             move.w  #$10,D0
             move.w  #1,D1
             bra.b   .DoRead
-.L4:
+.SoundAddr:
             move.w  #$14,D0
             bra.b   .DoRead
-.L5:
+.BootDevAddr:
             move.w  #$16,D0
             bra.b   .DoRead
 .L7:
@@ -1489,12 +1497,12 @@ New_WriteXPRam:
             swap    D0
             move.w  D0,D1
             swap    D0
-            cmpi.w  #$7C,D0                         ; Sound?
-            beq.b   .L2
+            cmpi.w  #$7C,D0                         ; Sound
+            beq.b   .SoundAddr
             cmpi.w  #$08,D0
             beq.b   .L1
-            cmpi.w  #$78,D0                         ; Startup device?
-            beq.b   .L3
+            cmpi.w  #$78,D0                         ; Default boot device
+            beq.b   .BootDevAddr
             cmpi.w  #$E0,D0
             beq.b   .L4
 .Exit:
@@ -1504,10 +1512,10 @@ New_WriteXPRam:
             move.w  #$10,D0
             move.w  #1,D1
             bra.b   .DoWrite
-.L2:
+.SoundAddr:
             move.w  #$14,D0
             bra.b   .DoWrite
-.L3:
+.BootDevAddr:
             move.w  #$16,D0
             bra.b   .DoWrite
 .L4:
