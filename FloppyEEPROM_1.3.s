@@ -134,22 +134,22 @@ ColdEntry:
             move.l  #PtchROMBase,PtchTblBase
             move.w  BaseOfROM,D0
             bsr.w   RamSizing
-            btst.b  #3,OutboundVIA
-            beq.w   .L7
+            btst.b  #ExpansionConn,OutboundVIA+vBufB    ; Check for something connected to the expansion port?
+            beq.w   .NoExpansion
             movea.l #$580800,A0
-            movep.w ($0,A0),D0
-            cmpi.w  #$55AA,D0
-            beq.b   .L5
+            movep.w ($0,A0),D0                      ; Read two bytes
+            cmpi.w  #$55AA,D0                       ; Check for SCSI adapter
+            beq.b   .SCSIPresent
             cmpi.w  #$AA55,D0
-            beq.b   .L5
-            bset.b  #CfgBit7,OutboundCfg
-            cmpi.w  #$4BB4,D0
-            beq.b   .L7
-            cmpi.w  #$4558,D0
-            beq.b   .L7
-            bclr.b  #CfgBit7,OutboundCfg
-            ori.b   #1<<CfgBit3|1<<CfgBit1,OutboundCfg
-            move.l  #300000,D0
+            beq.b   .SCSIPresent
+            bset.b  #ExtFloppy,OutboundCfg          ; Set external floppy connected bit
+            cmpi.w  #$4BB4,D0                       ; Check for external floppy ID?
+            beq.b   .NoExpansion
+            cmpi.w  #$4558,D0                       ; Check for external floppy ID 'EXTD'
+            beq.b   .NoExpansion
+            bclr.b  #ExtFloppy,OutboundCfg          ; Clear external floppy connected bit
+            ori.b   #1<<HostMac|1<<CfgBit1,OutboundCfg  ; Connection must be a host mac
+            move.l  #300000,D0                    ; Set delay counter
 .DelayLoop2:
             subq.w  #1,D0
             bne.b   .DelayLoop2
@@ -161,21 +161,22 @@ ColdEntry:
 .ClearScreenLoop2:
             move.l  D1,(A0)+
             dbf     D0,.ClearScreenLoop2
-            lea     SCSI_Base,A0
+; Check for SCSI
+            lea     SCSIRd,A0
             move.b  (sICR,A0),D0
             or.b    (sCSR,A0),D0
-            andi.b  #%10000000,D0
-            bne.b   .L6
-            move.b  #%10000000,(sICR,A0)
+            andi.b  #iRST,D0                        ; Make sure reset is not asserted
+            bne.b   .NoSCSI
+            move.b  #iRST,(sICR,A0)                 ; Assert reset
             move.b  (sICR,A0),D0
             and.b   (sCSR,A0),D0
-            andi.b  #-$80,D0
-            beq.b   .L6
-.L5:
-            bset.b  #CfgBit2,OutboundCfg
-.L6:
-            clr.b   SCSIWr+sICR
-.L7:
+            andi.b  #iRST,D0                        ; Verify reset is asserted
+            beq.b   .NoSCSI
+.SCSIPresent:
+            bset.b  #SCSIPresent,OutboundCfg        ; Set the bit to mark SCSI present
+.NoSCSI:
+            clr.b   SCSIWr+sICR                     ; Clear the reset
+.NoExpansion:
             movea.l OutboundGlobals,SP
             move.l  #PatchException,TraceVector
             bset.b  #CfgBit5,OutboundCfg
@@ -287,7 +288,7 @@ PatchMinorStartTest2:
 PatchMinorStartTest6:
             addq.w  #8,(4,SP)
             move.l  #PatchException,TraceVector
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             beq.b   .Exit
             move.w  $402602-BaseOfROM,ExpectedPC
             move.w  PatchMinorStartTest5-PtchROMBase,PatchOffset
@@ -301,12 +302,12 @@ PatchLoadExceptionVectors:
             rte
 InitPatch:
             move.w  #$5C,(4,SP)
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             bne.b   .L1
             move.b  #%11110111,VBase+vDIRB
             move.b  #%11110111,VBase+vBufB
 .L1:
-            btst.b  #CfgBit2,OutboundCfg
+            btst.b  #SCSIPresent,OutboundCfg
             beq.b   .L2
             jsr     $4004CE                         ; InitSCSI
 .L2:
@@ -318,10 +319,10 @@ PatchBeep:
             andi.w  #$7FFF,(SP)
             rte
 PatchPlusBoot4:
-            bset.b  #7,OutboundVIA
+            bset.b  #VIAB7,OutboundVIA+vBufB
             rts
 PatchPlusBoot:
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             beq.b   .L1
             andi.w  #$7FFF,(SP)
             rte
@@ -340,13 +341,13 @@ WarmEntry:
             btst.b  #IsMacSEROM,OutboundCfg
             beq.b   .L2
             move.l  #82444605,TimeDBRA
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             bne.b   .L1
             move.w  #518,TimeSCCDB
 .L1:
             jmp     $4000CE
 .L2:
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             beq.b   .L3
             movea.l PatchTblPtr,A0
             addq.l  #4,A0
@@ -391,7 +392,7 @@ PatchWhichCPUPlus:
             rte
 PatchGetPRAM:
             bset.b  #CfgBit5,OutboundCfg
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             bne.b   .L1
             bsr.w   ReplaceTraps
 .L1:
@@ -434,7 +435,7 @@ PatchInitIOMgr:
             btst.b  #IsMacSEROM,OutboundCfg
             bne.b   .L3
             bset.b  #(1<<hwCbClock)>>8,HWCfgFlags
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             beq.b   .L1
             pea     PatchInitIOMgr3
             move.l  (SP)+,Lvl1DT+8
@@ -446,7 +447,7 @@ PatchInitIOMgr:
 .L2:
             bsr.w   PatchInitIOMgr4
 .L3:
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             bne.b   .L5
             addi.w  #$A,(4,SP)
             movem.l A1-A0/D2-D0,-(SP)
@@ -465,7 +466,7 @@ PatchInitIOMgr:
             move.l  (SP)+,LineAVector
             movem.l (SP)+,D0-D2/A0-A1
 .L5:
-            btst.b  #CfgBit2,OutboundCfg
+            btst.b  #SCSIPresent,OutboundCfg
             bne.b   .Exit
             bset.b  #(1<<hwCbSCSI)>>8,HWCfgFlags
             pea     PatchBootRetry2\.PatchInitIOMgr5
@@ -476,7 +477,7 @@ PatchInitIOMgr:
 PatchBootRetry2:
             addq.w  #4,(4,SP)
             move.w  #$A000,(SP)
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             beq.b   .Exit
             addq.w  #4,(4,SP)
             move    #1<<Supervisor,SR
@@ -549,7 +550,7 @@ PatchInitIOMgr2:
             move.b  D1,(A1)
             move.b  #$14,(A0)
             movea.l #OutboundFlpBase+18,A0
-            moveq   %00000111,D0
+            moveq   #%00000111,D0
             btst.b  D0,(A0)
             bne.b   .L2
             moveq   #30,D1
@@ -586,7 +587,7 @@ PatchInitIOMgr2:
             move.b  #1<<ifT2,(vIFR,A0)
             btst.b  #IsMacSEROM,OutboundCfg
             beq.b   .PlusRestoreVector
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             bne.b   .SERestoreVector
             ori.w   #1<<15,(4,SP)
             bra.b   .Exit
@@ -648,26 +649,26 @@ PatchLineA_Unknown1:
             beq.b   .L2
             movea.l #$400FA2,A4
             movea.l #OutboundDisp+$3136,A2
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             beq.b   .L3
             movea.l #ScreenLow+$245E,A2
 .L3:
             lea     .L4,A6
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             beq.w   PatchLineA_Unknown2
             jmp     $400EC4                         ; Plus ROM PutIcon?
 .L4:
             tst.w   D7
             beq.b   .L6
             movea.l #OutboundDisp+$35E7,A2
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             beq.b   .L5
             movea.l #ScreenLow+$281F,A2
 .L5:
             movea.l D7,A4
             moveq   #14,D2
             lea     .L6,A6
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             beq.w   PatchLineA_Unknown3
             jmp     $400F30
 .L6:
@@ -719,7 +720,7 @@ PatchLineA_Unknown1_L22:
 .L1:
             _HideCursor
             movea.l #$400740,A0
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             bne.b   .L2
             lea     .L3,A0
 .L2:
@@ -768,7 +769,7 @@ PatchLineA_L25:
 .L1:
             _HideCursor
             movea.l #$400E74,A0
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             bne     .L2
             lea     .L3,A0
 .L2:
@@ -867,32 +868,30 @@ PatchLineA_Unknown2:
 PatchLineA:
             movem.l A6-A0/D7-D0,-(SP)
             movea.l ($3E,SP),A0
-            btst.b  #IsMacSEROM,OutboundCfg
-            bne.b   .L5
-            cmpa.l  #$400B9A,A0
+            btst.b  #IsMacSEROM,OutboundCfg         ; On SE ROMs?
+            bne.b   .L5                             ; Jump to the right checks if yes
+            cmpa.l  #$400B9A,A0                     ; _Control
             beq.w   .L21
-            cmpa.l  #$40073E,A0
+            cmpa.l  #$40073E,A0                     ; _HideCursor
             beq.w   .L22
-            cmpa.l  #$4007CE,A0
-            beq.w   PatchLineA_Unknown1_L22
-            cmpa.l  #$4007CE,A0
+            cmpa.l  #$4007CE,A0                     ; _HideCursor
             beq.w   PatchLineA_L23
-            btst.b  #CfgBit3,OutboundCfg
-            bne.b   .L3
+            btst.b  #HostMac,OutboundCfg            ; Is a host Mac connected?
+            bne.b   .L3                             ; If yes
             cmpi.w  #__InitGraf,(A0)
             bne.b   .L1
             bsr.w   PatchInitIOMgr8
             bra.w   .L14
 .L1:
-            cmpa.l  #$401382,A0
+            cmpa.l  #$401382,A0                     ; _EraseRect
             bne.b   .L2
             bra.b   .L6
 .L2:
-            cmpa.l  #$401328,A0
+            cmpa.l  #$401328,A0                     ; _MoveTo
             bne.b   .L3
             bra.b   .L8
 .L3:
-            cmpa.l  #$4012AC,A0
+            cmpa.l  #$4012AC,A0                     ; _PlotIcon
             bne.b   .L4
             bra.b   .L10
 .L4:
@@ -900,17 +899,17 @@ PatchLineA:
             bne.w   .L14
             bra.w   .L12
 .L5:
-            cmpa.l  #$400D08,A0
+            cmpa.l  #$400D08,A0                     ; _GetDefaultStartup
             beq.w   .L24
-            cmpa.l  #$400A6A,A0
+            cmpa.l  #$400A6A,A0                     ; _Control
             beq.w   .L21
-            cmpa.l  #$400E72,A0
+            cmpa.l  #$400E72,A0                     ; _HideCursor
             beq.w   .L25
-            btst.b  #CfgBit3,OutboundCfg
-            bne.b   .L9
-            cmpa.l  #$400F3A,A0
+            btst.b  #HostMac,OutboundCfg            ; Is a host Mac connected?
+            bne.b   .L9                             ; If yes
+            cmpa.l  #$400F3A,A0                     ; _HideCursor
             beq.w   PatchLineA_Unknown1_L22_L4
-            cmpa.l  #$401592,A0
+            cmpa.l  #$401592,A0                     ; _EraseRect
             bne.b   .L7
 .L6:
             movea.l ($20,SP),A0
@@ -919,17 +918,17 @@ PatchLineA:
             movea.l ($3E,SP),A0
             bra.b   .L14
 .L7:
-            cmpa.l  #$401538,A0
+            cmpa.l  #$401538,A0                     ; _MoveTo
             bne.b   .L9
 .L8:
             addi.l  #$200040,($42,SP)
             bra.b   .L14
 .L9:
-            cmpa.l  #$4014BC,A0
+            cmpa.l  #$4014BC,A0                     ; _PlotIcon
             bne.b   .L11
 .L10:
             bclr.b  #CfgBit5,OutboundCfg
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             bne.b   .L14
             movea.l ($20,SP),A0
             addi.l  #$200040,(A0)
@@ -937,11 +936,11 @@ PatchLineA:
             movea.l ($3E,SP),A0
             bra.b   .L14
 .L11:
-            cmpa.l  #$4008EE,A0
+            cmpa.l  #$4008EE,A0                     ; _CopyBits
             bne.b   .L14
 .L12:
             bclr.b  #CfgBit5,OutboundCfg
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             bne.b   .L14
             move.w  #$40,($5C,SP)
             pea     .L13
@@ -951,9 +950,9 @@ PatchLineA:
             dc.l    $1D0040
             dc.l    $1730240
 .L14:
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             bne.b   .L16
-            cmpi.w  #$A647,(A0)
+            cmpi.w  #$A647,(A0)                     ; _SetToolTrapAddress
             bne.b   .L15
             cmpi.w  #$15,D0
             bne.b   .L15
@@ -961,23 +960,23 @@ PatchLineA:
             addq.l  #$2,($2,SP)
             rte
 .L15:
-            btst.b  #CfgBit2,OutboundCfg
+            btst.b  #SCSIPresent,OutboundCfg
             beq.b   .L17
 .L16:
-            cmpi.w  #$A9A5,(A0)
+            cmpi.w  #$A9A5,(A0)                     ; _SizeRsrc
             bne.w   .L20
             move.l  $707D14,LineAVector
             bra.b   .L20
 .L17:
-            cmpi.w  #$A9A0,(A0)
+            cmpi.w  #$A9A0,(A0)                     ; _GetResource
             bne.b   .L18
             cmpi.l  #"INIT",($44,SP)
             bne.b   .L18
             move.l  $707D14,LineAVector
-            bclr.b  #hwCbSCSI-7,HWCfgFlags
+            bclr.b  #hwCbSCSI-8,HWCfgFlags          ; No SCSI
             bra.b   .L20
 .L18:
-            cmpi.w  #$A02E,(A0)
+            cmpi.w  #$A02E,(A0)                     ; _BlockMove
             bne.b   .L20
             move.l  ($42,SP),D0
             andi.l  #$3FFFFE,D0
@@ -988,7 +987,7 @@ PatchLineA:
             bne.b   .L20
             btst.b  #IsMacSEROM,OutboundCfg
             beq.b   .L19
-            btst.b  #CfgBit3,OutboundCfg
+            btst.b  #HostMac,OutboundCfg
             bne.b   .L19
             move.l  ADBBase,D0
             beq.b   .L19
@@ -1020,8 +1019,8 @@ PatchLineA:
             movea.l PtchTblBase,A0
             adda.w  #$92,A0
             move.l  A0,TraceVector
-            btst.b  #IsMacSEROM,OutboundCfg
-            bne.b   .L24
+            btst.b  #IsMacSEROM,OutboundCfg         ; On SE ROMs?
+            bne.b   .L24                            ; If yes
             lea     PatchLocPlusCPU,A6
             bra.b   .L25
 .L24:
@@ -1031,11 +1030,11 @@ PatchLineA:
             move.w  (A6)+,PatchOffset
             move.l  A6,PatchTblPtr
             move    #1<<TraceBit|1<<Supervisor|1<<InterruptBit2|1<<InterruptBit1|1<<InterruptBit0,SR
-            btst.b  #IsMacSEROM,OutboundCfg
-            bne.b   .MacSEExit
-            jmp     $4003AC
+            btst.b  #IsMacSEROM,OutboundCfg         ; On SE ROMs?
+            bne.b   .MacSEExit                      ; If yes, use the SE exit point
+            jmp     $4003AC                         ; Return to the Plus ROM
 .MacSEExit:
-            jmp     $4000D6
+            jmp     $4000D6                         ; Return to the SE ROM
 RamSizing:
             suba.l  A0,A0
             move.b  #1,$50000B
@@ -1185,13 +1184,13 @@ ReplaceTraps:
             _SetOSTrapAddress
             lea     OutboundVIA,A0
             ori.b   #7,(vDIRB,A0)
-            bclr.b  #1,(vBufB,A0)
-            bset.b  #2,(vBufB,A0)
+            bclr.b  #PRAMBit1,(vBufB,A0)
+            bset.b  #PRAMBit2,(vBufB,A0)
             move.b  #-$4F,D0
             bsr.b   PRAMOp
             move.b  #-$4B,D0
             bsr.b   PRAMOp
-            bset.b  #2,(vBufB,A0)
+            bset.b  #PRAMBit2,(vBufB,A0)
             movem.l (SP)+,D0-D2/A0-A1
             rts
 ; New_InitUtil
@@ -1361,8 +1360,8 @@ PRAMWriteOp:
             movea.l A0,A1
             lea     OutboundVIA,A0
             ori.b   #%111,(vDIRB,A0)
-            bclr.b  #1,(vBufB,A0)
-            bset.b  #2,(vBufB,A0)
+            bclr.b  #PRAMBit1,(vBufB,A0)
+            bset.b  #PRAMBit2,(vBufB,A0)
             ori.b   #$FF80,D0                       ; Write addresses start at $80
             bsr.b   PRAMOp
             bra.b   .L2
@@ -1371,7 +1370,7 @@ PRAMWriteOp:
             bsr.b   PRAMOp
 .L2:
             dbf     D1,.L1
-            bset.b  #2,(vBufB,A0)
+            bset.b  #PRAMBit2,(vBufB,A0)
             move    (SP)+,SR
             rts
 ; PRAMReadOp
@@ -1387,18 +1386,18 @@ PRAMReadOp:
             movea.l A0,A1
             lea     OutboundVIA,A0
             ori.b   #%111,(vDIRB,A0)
-            bclr.b  #1,(vBufB,A0)
-            bset.b  #2,(vBufB,A0)
+            bclr.b  #PRAMBit1,(vBufB,A0)
+            bset.b  #PRAMBit2,(vBufB,A0)
             andi.b  #$3F,D0
             bsr.b   PRAMOp
-            bclr.b  #0,(vBufB,A0)
+            bclr.b  #VIAB0,(vBufB,A0)
             bra.b   .L2
 .L1:
             bsr.b   PRAMReadOp2
             move.b  D0,(A1)+
 .L2:
             dbf     D1,.L1
-            bset.b  #2,(vBufB,A0)
+            bset.b  #PRAMBit2,(vBufB,A0)
             move    (SP)+,SR
             rts
 ; PRAMOp
@@ -1412,13 +1411,13 @@ PRAMOp:
 .L1:
             asl.b   #1,D0
             bcc.b   .L2
-            bset.b  #0,(vBufB,A0)
+            bset.b  #VIAB0,(vBufB,A0)
             bra.b   .L3
 .L2:
-            bclr.b  #0,(vBufB,A0)
+            bclr.b  #VIAB0,(vBufB,A0)
 .L3:
-            bset.b  #1,(vBufB,A0)
-            bclr.b  #1,(vBufB,A0)
+            bset.b  #PRAMBit1,(vBufB,A0)
+            bclr.b  #PRAMBit1,(vBufB,A0)
             dbf     D2,.L1
             movem.l (SP)+,D0-D2
             rts
@@ -1434,11 +1433,11 @@ PRAMReadOp2:
             andi.b  #$F8,(vBufB,A0)
 .L1:
             asl.b   #1,D0
-            bset.b  #1,(vBufB,A0)
+            bset.b  #PRAMBit1,(vBufB,A0)
             move.b  (vBufB,A0),D3
             andi.b  #1,D3
             or.b    D3,D0
-            bclr.b  #1,(vBufB,A0)
+            bclr.b  #PRAMBit1,(vBufB,A0)
             dbf     D2,.L1
             movem.l (SP)+,D1-D3
             rts
@@ -1963,7 +1962,7 @@ RamDisk_Unknown10:
             addq.w  #1,D0
             cmpi.w  #$10,D0
             bne.b   .L3
-            bra.w   .L19
+            bra.w   .ErrorExit
 .L5:
             sub.w   D2,D3
             move.w  D3,D1
@@ -2052,54 +2051,83 @@ RamDisk_Unknown10:
             beq.w   .L10
             addq.w  #1,D0
             cmpi.w  #10,D0
-            beq.b   .L19
+            beq.b   .ErrorExit
             bra.w   .L10
-.L19:
-            moveq   #-$24,D7
+.ErrorExit:
+            moveq   #ioErr,D7
 .Exit:
             movem.l (SP)+,D0-D6/A0-A6
             unlk    A6
             rts
 RamDisk_Unknown9:
             moveq   #0,D0
+            move.w  (-$A,A6),D0
+            lsl.l   #5,D0
+            lsl.l   #5,D0
+            adda.l  D0,A1
+            moveq   #0,D0
+            move.w  (-8,A6),D0
+            lsl.l   #5,D0
+            subq.l  #1,D0
+            move.l  A0,D2
+            btst.b  #1,(-2,A6)
+            beq.b   .L4
+            bset.b  #RAMDiskBit,(OutboundVIA+vDIRB)
+            bclr.b  #RAMDiskBit,(OutboundVIA+vBufB)
+            bsr.w   RamDisk_Unknown6
+            btst.l  #0,D2
+            beq.b   .L1
+            move.b  (A0)+,(A1)
+            subq.l  #6,A1
+            bra.b   .L2
+.L1:
+            move.l  (A0)+,D1
+            movep.l D1,(0,A1)
+.L2:
+
 
 
 
 RamDisk_Unknown8:
-            moveq   #-$44,D7
+            moveq   #dataVerErr,D7
             rts
 RamDisk_Unknown7:
             move.w  #9,D6
+            moveq   #0,D0
+            move.w  (-$A,A6),D0
+            lsl.l   D6,D0
+            adda.l  D0,A1
+            moveq   #0,D0
 
 
 RamDisk_Unknown5:
 
 
-
+;
 RAMDisk_Ctl:
             clr.w   D0
             cmpi.w  #$41,($1A,A0)
             beq.b   .L1
-            cmpi.w  #$5,($1A,A0)
-            beq.b   .L4
-            cmpi.w  #$6,($1A,A0)
-            beq.b   .L5
-            cmpi.w  #$7,($1A,A0)
-            beq.b   .L9
-            cmpi.w  #$15,($1A,A0)
-            beq.b   .L11
-            cmpi.w  #$16,($1A,A0)
-            beq.b   .L11
-            cmpi.w  #$17,($1A,A0)
-            beq.b   .L11
-            move.w  #-$11,D0
-            bra.w   .L12
+            cmpi.w  #5,($1A,A0)
+            beq.b   .Verify
+            cmpi.w  #6,($1A,A0)
+            beq.b   .Format
+            cmpi.w  #7,($1A,A0)
+            beq.b   .Eject
+            cmpi.w  #$21,($1A,A0)
+            beq.b   .Info
+            cmpi.w  #22,($1A,A0)
+            beq.b   .Info
+            cmpi.w  #23,($1A,A0)
+            beq.b   .Info
+            move.w  #controlErr,D0
+            bra.w   .Exit
 .L1:
             movem.l A1-A0/D0,-(SP)
             bclr.b  #5,(4,A1)
             tst.w   SysEvtMask
             bne.b   .L2
-            bste.b  #5,(4,A1)
+            btst.b  #5,(4,A1)
             move.w  #$3C,($22,A1)
             bra.b   .L3
 .L2:
@@ -2110,55 +2138,55 @@ RAMDisk_Ctl:
             _PostEvent
 .L3:
             movem.l (SP)+,D0/A0-A1
-            bra.w   .L12
-.L4:
-            bra.w   .L12
-.L5:
+            bra.w   .Exit
+.Verify:
+            bra.w   .Exit
+.Format:
             movem.l A1-A0/D1-D0,-(SP)
-            move.w  #$F,D0
+            move.w  #15,D0
             moveq   #0,D1
-            lea     OutboundDisp,A1
-            bset.b  #5,OutboundVIA+vDIRB
-            bclr.b  #5,OutboundVIA+vBufB
-.L6:
-            bsr.w   RamDisk_Unknown2
-            lea     RAMDiskBase,A0
+            lea     OutboundDisp,A1                 ; A1 = end (display SRAM start)
+            bset.b  #RAMDiskBit,OutboundVIA+vDIRB
+            bclr.b  #RAMDiskBit,OutboundVIA+vBufB
+.SetupLoop:
+            bsr.w   RamDisk_BankSwitch
+            lea     RAMDiskBase,A0                  ; A1 = start (RAM disk start)
             clr.w   (A0)
             tst.b   (A0)
-            beq.b   .L7
+            beq.b   .ClearLoop
             tst.b   (1,A0)
             bne.b   .L8
-.L7:
+.ClearLoop:
             move.l  D1,(A0)+
             move.l  D1,(A0)+
             move.l  D1,(A0)+
             move.l  D1,(A0)+
             cmpa.l  A0,A1
-            bne.b   .L7
+            bne.b   .ClearLoop
 .L8:
-            dbf     D0,.L6
-            bset.b  #5,OutboundVIA+vBufB
+            dbf     D0,.SetupLoop
+            bset.b  #RAMDiskBit,OutboundVIA+vBufB
             movem.l (SP)+,D0-D1/A0-A1
-            bra.b   .L12
-.L9:
+            bra.b   .Exit
+.Eject:
             btst.b  #CfgBit5,OutboundCfg
             beq.b   .L10
             bset.b  #5,(4,A1)
             move.w  #$1E,($22,A1)
-            move.w  #-$11,D0
-            bra.b   .L12
+            move.w  #controlErr,D0
+            bra.b   .Exit
 .L10:
             clr.w   D0
-            bra.b   .L12
-.L11:
+            bra.b   .Exit
+.Info:
             move.l  ($14,A1),($1C,A0)
-            bra.b   .L12
+            bra.b   .Exit
             move.l  #$602,($1C,A0)
-.L12:
-            btst.b  #1,(6,A0)
-            bne.b   .Exit
-            move.l  JIODone,-(SP)
 .Exit:
+            btst.b  #1,(6,A0)
+            bne.b   .DoneExit
+            move.l  JIODone,-(SP)
+.DoneExit:
             rts
 RAMDisk_Status:
             move.w  #-$12,D0
@@ -2182,7 +2210,9 @@ RAMDisk_Data1:
             incbin  'bin/RAMDisk_Data1.bin'
             dc.b    21
             dc.b    'Outbound Silicon Disk'
-RamDisk_Unknown2:
+;
+; Inputs:   D0
+RamDisk_BankSwitch:
             move.b  D0,$500001
             ror.b   #1,D0
             move.b  D0,$500003
@@ -2193,8 +2223,8 @@ RamDisk_Unknown2:
             ror.b   #3,D0
             rts
 RamDisk_Unknown1:
-            bset.b  #5,OutboundVIA+vDIRB
-            bclr.b  #5,OutboundVIA,vBufB
+            bset.b  #RAMDiskBit,OutboundVIA+vDIRB
+            bclr.b  #RAMDiskBit,OutboundVIA+vBufB
             movem.l A4-A0/D3-D0,-(SP)
             movea.l RAMDiskBase,A0
             movea.l RAMDiskBase+$80000,A1
@@ -2203,7 +2233,7 @@ RamDisk_Unknown1:
             adda.w  #$FA,A4
             clr.w   D0
 .L1:
-            bsr.b   RamDisk_Unknown2
+            bsr.b   RamDisk_BankSwitch
             move.w  (A0),-(SP)
             move.w  (A1),-(SP)
             clr.w   (A0)
@@ -2218,7 +2248,7 @@ RamDisk_Unknown1:
 .L2:
             clr.w   D0
 .L3:
-            bsr.b   RamDisk_Unknown2
+            bsr.b   RamDisk_BankSwitch
             tst.b   (A3)
             bne.b   .L4
             subq.b  #1,(A3)
@@ -2244,7 +2274,7 @@ RamDisk_Unknown1:
             clr.w   D2
             moveq   #$F,D0
 .L7:
-            bsr.w   RamDisk_Unknown2
+            bsr.w   RamDisk_BankSwitch
             move.b  (A4,D0.w),D2
             move.b  (.L8,PC,D2.w),D2
             move.b  D2,(A4,D0.w)
@@ -2252,7 +2282,7 @@ RamDisk_Unknown1:
             move.w  (SP)+,(A0)
             dbf     D0,.L7
             movem.l (SP)+,D0-D3/A0-A4
-            bset.b  #5,OutboundVIA+vBufB
+            bset.b  #RAMDiskBit,OutboundVIA+vBufB
             rts
 .L8:
             dc.b    $0
@@ -2271,16 +2301,176 @@ RamDisk_Unknown1:
             dc.b    $D3
             dc.b    $E3
             dc.b    $F4
-Super_Unknown5:
+floppyopen:
             link.w  A6,#-4
+            movem.l A4-A3/D7,-(SP)
+            movea.l ($C,A6),A4
+            movea.l OutboundGlobals,A3
+            jsr     Super_Unknown6
+            pea     ($14,A4)
+            jsr     Super_Unknown7
+            jsr     Super_Unknown9
+            move.b  #3,(-4,A6)
+            move.b  #$DF,(-3,A6)
+            move.b  #$F,(-2,A6)
+            moveq   #3,D0
+            move.l  D0,-(SP)
+            pea     (-4,A6)
+            jsr     Super_Unknown12
+            clr.b   (5,A3)
+            move.b  #1,(6,A3)
+            move.b  #-1,(7,A3)
+            clr.w   ($C,A3)
+            move.w  #$FFBF,(30,A3)
+            clr.w   ($34,A3)
+            move.w  #1,($38,A3)
+            move.w  #1,($36,A3)
+            clr.w   ($32,A3)
+            move.b  #$50,($3E,A3)
+            move.b  #$30,($3A,A3)
+            move.l  #$4800,($2A,A3)
+            jsr     Super_Unknown30
             
-Super_Unknown15:
 
-Super_Unknown14:
+floppyprime:
+
+floppycontrol:
+            link.w  A6,#-$40
+            movem.l A4-A3,-(SP)
+            movea.l OutboundGlobals,A4
+            movea.l (8,A6),A0
+            move.w  ($1A,A0),D0
+            subq.w  #5,D0
+            beq.b   .verify
+            subq.w  #1,D0
+            beq.b   .format
+            subq.w  #1,D0
+            beq.b   .eject
+            subi.w  #$E,D0
+            beq.b   .PhysIcon
+            subq.w  #1,D0
+            beq.b   .LogIcon
+            subq.w  #1,D0
+            beq.b   .info
+            subi.w  #$2A,D0
+            beq.b   .L8
+            bra.w   .ErrorExit
+.verify:
+            jsr     verifydisk
+            bra.w   .Exit
+.format:
+            jsr     formatdisk
+            bra.w   .Exit
+.eject:
+            moveq   #0,D0
+            move.l  D0,-(SP)
+            jsr     driveready
+            move.b  #-1,(5,A4)
+            moveq   #1<<CfgBit5,D0
+            and.b   OutboundCfg,D0
+            addq.l  #4,SP
+            beq.b   .L4
+            ori.b   #1<<CfgBit6,OutboundCfg
+            clr.b   (5,A4)
+            moveq   #-$11,D0
+            bra.w   .Exit
+.L4:
+            move.w  ($30,A4),D0
+            bra.w   .Exit
+.PhysIcon:
+            movea.l ($C,A6),A0
+            move.l  ($14,A0),D0
+            add.l   #$100,D0
+            movea.l (8,A6),A0
+            move.l  D0,($1C,A0)
+            bra.b   .SuccessExit
+.LogIcon:
+            movea.l ($C,A6),A0
+            movea.l (8,A6),A1
+            move.l  ($14,A0),($1C,A1)
+            bra.b   .SuccessExit
+.info:
+            movea.l (8,A6),A0
+            moveq   #4,D0
+            move.l  D0,($1C,A0)
+            bra.b   .SuccessExit
+.L8:
+            moveq   #0,D0
+            pea     (-$40,A6)
+            jsr     Super_Unknown22
+            movea.l $358,A3
+            addq.l  #2,SP
+            bra.b   .L11
+.L9:
+            tst.w   ($48,A3)
+            bne.b   .L10
+            move.w  ($E,A4),D0
+            neg.w   D0
+            cmp.w   ($4A,A3),D0
+            bne.b   .L10
+            move.w  ($E,A4),($4A,A3)
+            bra.b   .L12
+.L10:
+            movea.l (A3),A3
+.L11:
+            move.l  A3,D0
+            bne.b   .L9
+.L12:
+            movea.l ($C,A6),A0
+            andi.w  #$DFFF,(4,A0)
+            bra.b   .SuccessExit
+.ErrorExit:
+            moveq   #controlErr,D0
+            bra.b   .Exit
+.SuccessExit:
+            moveq   #0,D0
+.Exit:
+            movem.l (-$48,A6),A3-A4
+            unlk    A6
+            rts
+floppystatus:
+            link.w  A6,#-$16
+            movem.l A4-A3,-(SP)
+            movea.l (8,A6),A4
+            movea.l OutboundGlobals,A3
+            move.w  ($1A,A4),D0
+
+readwriteop:
+            link.w  A6,#0
+            movem.l A4-A3/D7-D3,-(SP)
+            movea.l ($14,A6),A4
+            move.l  ($18,A6),D5
+            move.l  ($10,A6),D6
+            movea.l OutboundGlobals,A3
+
+verifydisk:
+            movem.l A3/D7,-(SP)
+            movea.l OutboundGlobals,A3
+            move.b  ($3E,A3),D0
+            subq.b  #1,D0
+            move.b  D0,($2E,A3)
+            bra.w   .L6
+.L1:
+            tst.b   ($3A,A3)
+            bne.b   .L4
+            clr.w   D7
+            bra.b   .L3
+.L2:
+
+formatdisk:
+
+formatcylinder:
+
+driveready:
+
+determinetype:
+
+seek_sense:
             link.w  A6,#-6
             movem.l A4-A3/D7-D6,-(SP)
             lea     (-3,A6),A4
             lea     (-2,A6),A3
+
 
 Super_Install:
             movem.l A6-A0/D7-D0,-(SP)
@@ -2288,22 +2478,22 @@ Super_Install:
             lea     ($140,A1),A0
             move.l  A0,($26,A1)
             moveq   #-5,D0
-            btst.b  #CfgBit3,OutboundCfg
-            beq.b   .L1
+            btst.b  #HostMac,OutboundCfg            ; Is a host Mac connected?
+            beq.b   .L1                             ; If not, skip ahead
             moveq   #-49,D0
 .L1:
-            _DrvrInstall
+            _DrvrInstall                            ; Create DCE
             lea     Super_Driver,A1
             movea.l UTableBase,A0
-            btst.b  #CfgBit3,OutboundCfg
-            bne.b   .L2
-            movea.l ($10,A0),A0
-            bra.b   .L3
-.L2:
-            move.l  ($C0,A0),A0
-.L3:
-            movea.l (A0),A0
-            move.l  A1,(A0)+
+            btst.b  #HostMac,OutboundCfg            ; Is a host Mac connected?
+            bne.b   .HostConnected                  ; If so load a different address
+            movea.l (16,A0),A0                      ; Replace the Sony disk driver?
+            bra.b   .InstallDriver
+.HostConnected:
+            move.l  ($C0,A0),A0                     ; Install the floppy driver here
+.InstallDriver:
+            movea.l (A0),A0                         ; Get pointer to driver DCE
+            move.l  A1,(A0)+                        ; Load driver
             move.w  (A1),(A0)+
             suba.w  #50,SP
             movea.l SP,A0
@@ -2320,7 +2510,7 @@ Super_Open:
             move.l  A0,-(SP)
             move.l  A1,-(SP)
             move.l  A0,-(SP)
-            jsr     Super_Unknown5
+            jsr     floppyopen
             addq.l  #8,SP
             movea.l (SP)+,A0
             move.w  D0,($10,A0)
@@ -2336,7 +2526,7 @@ Super_Prime:
             move.l  A0,-(SP)
             movea.l OutboundGlobals,A0
             addq.w  #1,($34,A0)
-            jsr     Super_Unknown3
+            jsr     floppyprime
             ; Fall-through
 
 Super_Unknown2:
@@ -2358,7 +2548,7 @@ Super_Ctl:
             move.l  A0,-(SP)
             movea.l OutboundGlobals,A0
             addq.w  #1,($34,A0)
-            jsr     Super_Unknown4
+            jsr     floppycontrol
             bra.b   Super_Unknown2
 Super_Status:
             movem.l A6-A0/D7-D1,-(SP)
@@ -2366,7 +2556,7 @@ Super_Status:
             move.l  A0,-(SP)
             movea.l OutboundGlobals,A0
             addq.w  #1,($34,A0)
-            jsr     Super_Unknown1
+            jsr     floppystatus
             bra.b   Super_Unknown2
 Super_Driver:
             dc.w    $4F00                           ; Flags
@@ -2461,7 +2651,7 @@ Super_Unknown10:
             bne.b   .L1
             moveq   #0,D0
             move.l  D0,-(SP)
-            jsr     Super_Unknown11
+            jsr     driveready
             addq.l  #4,SP
             bra.b   .Exit
 .L1:
@@ -2494,7 +2684,7 @@ Super_Unknown12:
 .L4:
             btst.l  #6,D2
             bne.b   .L3
-            move.b  (A0)+,$C8001A
+            move.b  (A0)+,OutboundFlpBase+$1A
             dbf     D0,.L1
             moveq   #1,D0                           ; Return 1
 .Exit:
@@ -2510,7 +2700,7 @@ Super_Unknown13:
 .L1:
             move.l  #100000,D1
 .L2:
-            move.b  $C80018,D2
+            move.b  OutboundFlpBase+$18,D2
             bmi.b   .L4
             subq.l  #1,D1
             bne.b   .L2
@@ -2520,7 +2710,7 @@ Super_Unknown13:
 .L4:
             btst.l  #6,D2
             beq.b   .L3
-            move.b  $C8001A,(A0)+
+            move.b  OutboundFlpBase+$1A,(A0)+
             dbf     D0,.L1
             moveq   #1,D0
 .Exit:
@@ -2530,8 +2720,8 @@ Super_Unknown13:
 Super_Unknown29:
             link.w  A6,#0
             movem.l A2-A0/D3-D1,-(SP)
-            movea.l #$C80018,A0
-            movea.l #$C8001A,A1
+            movea.l #OutboundFlpBase+$18,A0
+            movea.l #OutboundFlpBase+$1A,A1
             movea.l ($8,A6),A2
             moveq   #-80,D0
             move.l  ($C,A6),D1
@@ -2559,8 +2749,8 @@ Super_Unknown29:
 Super_476:
             link.w  A6,#0
             movem.l A2-A0/D3-D1,-(SP)
-            movea.l #$C80018,A0
-            movea.l #$C8001A,A1
+            movea.l #OutboundFlpBase+$18,A0
+            movea.l #OutboundFlpBase+$1A,A1
             movea.l ($8,A6),A2
             moveq   #-15,D0
             move.l  ($C,A6),D1
@@ -2599,12 +2789,12 @@ Super_4C0:
 .L2:
             movem.l (SP)+,D7/A3-A4
             rts
-Super_4DE:
+Super_Unknown30:
             movem.l A4-A2/D7-D2/D1,-(SP)
             moveq   #1,D1
             moveq   #2,D2
             move.l  D1,-(SP)
-            bsr.w   Super_Unknown14
+            bsr.w   seek_sense
             move.l  #-$F800,(SP)
             lea     (2,SP),A4
             movea.l SP,A3
@@ -2647,14 +2837,14 @@ Super_540:
             bsr.w   Super_Unknown12
             addq.l  #8,SP
             rts
-Super_54C:
+rwop:
             link.w  A6,#-$10
             movem.l A5-A2/D7-D3,-(SP)
             move.l  (8,A6),D3
             movea.l OutboundGlobals,A2
             moveq   #1,D7
             move.l  D7,-(SP)
-            jsr     Super_Unknown11
+            jsr     driveready
             addq.l  #4,SP
             tst.w   D0
             bne.b   .L1
@@ -2664,7 +2854,7 @@ Super_54C:
             moveq   #1,D0
             move.b  ($2E,A2),D0
             move.l  D0,-(SP)
-            jsr     Super_Unknown14
+            jsr     seek_sense
             addq.l  #4,SP
             tst.w   D0
             bne.b   .L2
@@ -2744,14 +2934,10 @@ Super_54C:
 
             
 ;temp
-Super_Unknown1:
 Super_Unknown8:
 Super_UnknownData5:
-Super_Unknown11:
-Super_Unknown4:
-Super_Unknown3:
-Super_Unknown5:
-RamDisk_Unknown1:
+
+
 Unknown_DFA:
             link.w  A6,#0
             movem.l A4-A2/D6-D3,-(SP)

@@ -118,3 +118,71 @@ HDDriver_UnknownData2:
             dc.b    18
             dc.b    "Outbound Hard Disk"
             dc.b    0,0,0
+HDDriver_F82CCA:
+            move.b  OutboundHDBase+5,D0
+            bmi.b   HDDriver_F82CCA
+            btst.l  0,D0
+            bne.b   .Exit
+            clr.w   D0
+.Exit:
+            rts
+HDDriver_F82CDC:
+            lea     OutboundHDBase+5,A0
+.L1:
+            move.b  (A0),D0
+            bmi.b   .L1
+.L2:
+            or.b    (A0),D0
+            btst.l  #0,D0
+            beq.b   .L3
+            move.b  OutboundHDBase+$1D,401D10
+            bra.b   .Exit
+.L3:
+            btst.l  #3,D0
+            beq.b   .L2
+            clr.w   D0
+.Exit:
+            rts
+HDDriver_F82D00:
+            link.w A6,#0
+            movem.l A3-A2/D4-D2,-(SP)
+            movea.l ($14,A6),A3
+            move.w  ($12,A6),D4
+            move.l  ($C,A6),D3
+.L1:
+            move.l  (8,A6),-(SP)
+            move.l  D3,-(SP)
+            jsr     HDDriver_2714
+            addq.l  #8,SP
+            tst.w   D0
+            bmi.w   .Exit
+            move.w  D4,D0
+            move.b  D0,OutboundHDBase+$2D
+            move.b  #$20,OutboundHDBase+5
+            clr.w   D2
+            move.b  D0,D2
+            subq.b  #1,D2
+            move.l  A3,D0
+            andi.w  #1,D0
+            bne.b   .L4
+.L2:
+            jsr     HDDriver_F82CDC
+            tst.w   D0
+            bmi.b   .Exit
+            move.w  (512/16)-1,D1
+            lea     OutboundHDBase+$3C,A0
+.L3:
+            move.w  (A0),(A3)+
+            move.w  (A0),(A3)+
+            move.w  (A0),(A3)+
+            move.w  (A0),(A3)+
+            move.w  (A0),(A3)+
+            move.w  (A0),(A3)+
+            move.w  (A0),(A3)+
+            move.w  (A0),(A3)+
+            dbf     D1,.L3
+            subq.w  #1,D4
+            addq.l  #1,D3
+            dbf     D2,.L2
+
+
