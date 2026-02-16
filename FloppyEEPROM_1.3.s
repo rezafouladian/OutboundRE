@@ -1861,13 +1861,13 @@ RAMDisk_Name:
             dc.b    ".RAMd"
 RAMDisk_Open:
             movem.l A1-A0/D0,-(SP)
-            bsr.w   RamDisk_Unknown1
+            bsr.w   RamDisk_Sizing
             movea.l OutboundGlobals,A2
-            tst.b   ($13C,A2)
+            tst.b   (RAMDiskSize,A2)
             beq.b   .Exit
             moveq   #4,D0
             move.l  D0,-(SP)
-            move.b  ($13C,A2),D0
+            move.b  (RAMDiskSize,A2),D0
             mulu.w  #$1FF,D0
             clr.l   -(SP)
             move.l  D0,-(SP)
@@ -2072,8 +2072,8 @@ RamDisk_Unknown9:
             move.l  A0,D2
             btst.b  #1,(-2,A6)
             beq.b   .L4
-            bset.b  #RAMDiskBit,(OutboundVIA+vDIRB)
-            bclr.b  #RAMDiskBit,(OutboundVIA+vBufB)
+            bset.b  #RAMDiskBit,OutboundVIA+vDIRB
+            bclr.b  #RAMDiskBit,OutboundVIA+vBufB
             bsr.w   RamDisk_Unknown6
             btst.l  #0,D2
             beq.b   .L1
@@ -2084,11 +2084,91 @@ RamDisk_Unknown9:
             move.l  (A0)+,D1
             movep.l D1,(0,A1)
 .L2:
-
-
-
-
-RamDisk_Unknown8:
+            move.l  (A0)+,D1
+            movep.l D1,(8,A1)
+            move.l  (A0)+,D1
+            movep.l D1,($10,A1)
+            move.l  (A0)+,D1
+            movep.l D1,($18,A1)
+            adda.w  #$20,A1
+            dbf     D0,.L1
+            btst.l  #0,D2
+            beq.b   .L3
+            move.w  (A0)+,D1
+            movep.w D1,(0,A1)
+            move.b  (A0)+,(4,A1)
+.L3:
+            moveq   #0,D7
+            bset.b  #RAMDiskBit,OutboundVIA+vBufB
+            rts
+.L4:
+            btst.b  #0,(-2,A6)
+            beq.b   .L8
+            btst.l  #0,D2
+            beq.b   .L5
+            move.b  (A1),(A0)+
+            subq.l  #6,A1
+            bra.b   .L6
+.L5:
+            movep.l (0,A1),D1
+            move.l  D1,(A0)+
+.L6:
+            movep.l (8,A1),D1
+            move.l  D1,(A0)+
+            movep.l ($10,A1),D1
+            move.l  D1,(A0)+
+            movep   ($18,A1),D1
+            move.l  D1,(A0)+
+            adda.w  #$20,A1
+            dbf     D0,.L5
+            btst.l  #0,D2
+            beq.b   .L7
+            movep.w (0,A1),D1
+            move.w  D1,(A0)+
+            move.b  (4,A1),(A0)+
+.L7:
+            exg     D2,A0
+            bsr.w   RamDisk_Unknown3
+            bne.b   RamDisk_VerifyError
+            exg     D2,A0
+            moveq   #0,D7
+            rts
+.L8:
+            btst.l  #0,D2
+            beq.b   .L9
+            move.b  (A0)+,D1
+            cmpb    (A1),D1
+            bne.b   RamDisk_VerifyError
+            subq.w  #6,A1
+            bra.b   .L10
+.L9:
+            movep.l (0,A1),D1
+            cmp.l   (A0)+,D1
+            bne.b   RamDisk_VerifyError
+.L10:
+            movep.l (8,A1),D1
+            cmp.l   (A0)+,D1
+            bne.b   RamDisk_VerifyError
+            movep.l ($10,A1),D1
+            cmp.l   (A0)+,D1
+            bne.b   RamDisk_VerifyError
+            movep.l ($18,A1),D1
+            cmp.l   (A0)+,D1
+            bne.b   RamDisk_VerifyError
+            adda.w  #$20,A1
+            dbf     D0,.L9
+            btst.l  #0,D2
+            beq.b   .Exit
+            movep.l (0,A1),D1
+            cmp.w   (A0)+,D1
+            bne.b   RamDisk_VerifyError
+            move.b  (A0)+,D1
+            cmp.b   (4,A1),D1
+            bne.b   RamDisk_VerifyError
+.Exit:
+            moveq   #0,D7
+            rts
+RamDisk_VerifyError:
             moveq   #dataVerErr,D7
             rts
 RamDisk_Unknown7:
@@ -2098,11 +2178,128 @@ RamDisk_Unknown7:
             lsl.l   D6,D0
             adda.l  D0,A1
             moveq   #0,D0
-
-
-RamDisk_Unknown5:
-
-
+            move.w  (-8,A6),D0
+            lsl.l   D6,D0
+            movem.l A0/D0,-(SP)
+            btst.b  #1,(-2,A6)
+            bne.b   .L1
+            btst.b  #0,(-2,A6)
+            beq.b   .L3
+            exg     A0,A1
+            _BlockMove
+            bsr.w   RamDisk_Unknown3
+            beq.b   .L2
+            movem.l (SP)+,D0/A0
+            bra.b   RamDisk_VerifyError
+.L1:
+            bset.b  #RAMDiskBit,OutboundVIA+vDIRB
+            bclr.b  #RAMDiskBit,OutboundVIA+vBufB
+            bsr.w   RamDisk_Unknown6
+            _BlockMove
+            bset.b  #RAMDiskBit,OutboundVIA+vBufB
+.L2:
+            movem.l (SP)+,D0/A0
+            adda.l  D0,A0
+            bra.b   .Exit
+.L3:
+            movem.l (SP)+,D0/A0
+.L4:
+            cmpm.b  (A0)+,(A1)+
+            bne.b   RamDisk_VerifyError
+            subq.l  #1,D0
+            bne.b   .L4
+            moveq   #0,D7
+            rts
+RamDisk_Checksum:
+            movem.l A0/D2-D1,-(SP)
+            moveq   #0,D0
+            move.l  A0,D2
+            btst.l  #0,D2
+            bne.b   .L2
+            addq.l  #1,D1
+            asr.l   #4,D1
+            subq.l  #1,D1
+.L1:
+            move.l  (A0)+,D2
+            eor.l   D2,D0
+            move.l  (A0)+,D2
+            eor.l   D2,D0
+            move.l  (A0)+,D2
+            eor.l   D2,D0
+            move.l  (A0)+,D2
+            eor.l   D2,D0
+            dbf     D1,.L1
+            move.l  D0,D2
+            asr.w   #8,D2
+            eor.b   D2,D0
+            swap    D2
+            eor.b   D2,D0
+            asr.w   #8,D2
+            eor.b   D2,D0
+            bra.b   .Exit
+.L2:
+            move.b  (A0)+,D2
+            eor.b   D2,D0
+            dbf     D1,.L2
+.Exit:
+            movem.l (SP)+,D1-D2/A0
+            rts
+RamDisk_Unknown4:
+            movea.l #RAMDiskBase,A1
+            move.w  (-$10,A6),D0
+            move.b  (A2,D0.w),D4
+            btst.b  #4,(-2,A6)
+            beq.b   .L1
+            adda.l  #$80000,A1
+            lsr.b   #2,D4
+.L1:
+            andi.b  #$30,D4
+            cmpi.b  #$30,D4
+            beq.b   .L3
+            cmpi.b  #$10,D4
+            beq.b   .PatchLineA_L23
+            addq.w  #1,A1
+.L2:
+            moveq   #2,D4
+            bra.b   .L4
+.L3:
+            moveq   #1,D4
+.L4:
+            move.w  (-$A,A6),D3
+            mulu.w  D4,D3
+            adda.w  D3,A1
+            move.w  (-8,A6),D3
+            subq.w  #1,D3
+            move.l  #$1FF,D1
+            rts
+RamDisk_Unknown6:
+            movem.l A3-A0/D4-D0,-(SP)
+            bsr.b   RamDisk_Unknown4
+.L1:
+            bsr.w   RamDisk_Checksum
+            move.b  D0,(A1)
+            adda.l  D4,A1
+            adda.l  D1,A0
+            addq.l  #1,A0
+            dbf     D3,.L1
+            movem.l (SP)+,D0-D4/A0-A3
+            rts
+RamDisk_Unknown3:
+            movem.l A3-A0/D5-D0,-(SP)
+            bsr.b   RamDisk_Unknown4
+.L1:
+            bsr.b   RamDisk_Checksum
+            move.b  (A1),D5
+            cmp.b   D0,D5
+            bne.b   .Exit
+            adda.l  D4,A1
+            adda.l  D1,A0
+            addq.l  #1,A0
+            dbf     D3,.L1
+            cmp.w   D0,D0
+.Exit:
+            movem.l (SP)+,D0-D5/A0-A3
+            rts
 ;
 RAMDisk_Ctl:
             clr.w   D0
@@ -2114,7 +2311,7 @@ RAMDisk_Ctl:
             beq.b   .Format
             cmpi.w  #7,($1A,A0)
             beq.b   .Eject
-            cmpi.w  #$21,($1A,A0)
+            cmpi.w  #21,($1A,A0)
             beq.b   .Info
             cmpi.w  #22,($1A,A0)
             beq.b   .Info
@@ -2222,7 +2419,7 @@ RamDisk_BankSwitch:
             move.b  D0,$500007
             ror.b   #3,D0
             rts
-RamDisk_Unknown1:
+RamDisk_Sizing:
             bset.b  #RAMDiskBit,OutboundVIA+vDIRB
             bclr.b  #RAMDiskBit,OutboundVIA+vBufB
             movem.l A4-A0/D3-D0,-(SP)
@@ -2270,13 +2467,13 @@ RamDisk_Unknown1:
             movea.l A1,A3
             bra.b   .L2
 .L6:
-            move.b  D2,($13C,A2)
+            move.b  D2,(RAMDiskSize,A2)
             clr.w   D2
             moveq   #$F,D0
 .L7:
             bsr.w   RamDisk_BankSwitch
             move.b  (A4,D0.w),D2
-            move.b  (.L8,PC,D2.w),D2
+            move.b  (.BankTable,PC,D2.w),D2
             move.b  D2,(A4,D0.w)
             move.w  (SP)+,(A1)
             move.w  (SP)+,(A0)
@@ -2284,7 +2481,7 @@ RamDisk_Unknown1:
             movem.l (SP)+,D0-D3/A0-A4
             bset.b  #RAMDiskBit,OutboundVIA+vBufB
             rts
-.L8:
+.BankTable:
             dc.b    $0
             dc.b    $11
             dc.b    $21
@@ -2316,7 +2513,7 @@ floppyopen:
             moveq   #3,D0
             move.l  D0,-(SP)
             pea     (-4,A6)
-            jsr     Super_Unknown12
+            jsr     Floppy_WriteCMD
             clr.b   (5,A3)
             move.b  #1,(6,A3)
             move.b  #-1,(7,A3)
@@ -2330,9 +2527,24 @@ floppyopen:
             move.b  #$30,($3A,A3)
             move.l  #$4800,($2A,A3)
             jsr     Super_Unknown30
+            move.b  $4A,(-4,A6)
+            clr.b   (-3,A6)
             
 
 floppyprime:
+            link.w  A6,#-$A
+            movem.l A4-A3/D7-D4,-(SP)
+            movea.l (8,A6),A4
+            movea.l OutboundGlobals,A3
+            movea.l ($C,A6),A0
+            move.l  ($10,A0),(-$A,A6)
+            move.l  ($24,A4),D4
+            move.l  ($20,A4),(-6,A6)
+            bra.w   .L12
+.L1:
+            tst.b   ($3A,A3)
+            beq.b   .L2
+            move.l  (-$A,A6),D0
 
 floppycontrol:
             link.w  A6,#-$40
@@ -2442,6 +2654,7 @@ readwriteop:
             move.l  ($18,A6),D5
             move.l  ($10,A6),D6
             movea.l OutboundGlobals,A3
+            move.b  ($F,A6),D0
 
 verifydisk:
             movem.l A3/D7,-(SP)
@@ -2458,20 +2671,344 @@ verifydisk:
 .L2:
 
 formatdisk:
-
+            move.l  A3,-(SP)                        ; Save A3
+            movea.l OutboundGlobals,A3
+            moveq   #1,D0
+            move.l  D0,-(SP)
+            jsr     driveready
+            tst.w   D0
+            addq.l  #4,SP
+            bne.b   .L1
+            moveq   #offLinErr,D0                   ; Set error code
+            bra.b   .Exit
+.L1:
+            moveq   #1,D0
+            move.l  D0,-(SP)
+            jsr     determinetype
+            tst.w   D0
+            addq.l  #4,SP
+            bne.b   .L2
+            moveq   #noNybErr,D0                    ; Set error code
+            bra.b   .Exit
+.L2:
+            clr.b   ($2E,A3)
+            bra.b   .L5
+.L3:
+            jsr     formatcylinder
+            move.w  D0,($30,A3)
+            beq.b   .L4
+            move.w  ($30,A3),D0
+            bra.b   .Exit
+.L4:
+            addq.b  #1,($2E,A3)
+.L5:
+            move.b  ($2E,A3),D0
+            cmp.b   ($3E,A3),D0
+            bcs.b   .L3
+            moveq   #0,D0
+.Exit:
+            movea.l (SP)+,A3                        ; Restore A3
+            rts
 formatcylinder:
+            link.w  A6,#-$56
+            movem.l A4-A3/D7-D6,-(SP)
+            movea.l OutboundGlobals,A4
+            moveq   #0,D0
+            move.b  (FlpCylinder,A4),D0
+            move.l  D0,-(SP)
+            jsr     seek_sense
+            tst.w   D0
+            addq.l  #4,SP
+            bne.b   .L1
+            moveq   #seekErr,D0                     ; Return seek error
+            bra.w   .Exit
+.L1:
+            clr.b   D6
+            bra.w   .L16
+.L2:
+            tst.b   (FlpType,A4)                    ; GCR disk?
+            beq.w   .GCR
+            clr.w   D7
+            lea     (-$48,A6),A3
+            bra.b   .L4
+.L3:
+            move.b  (FlpCylinder,A4),(A3)+
+            move.b  D6,(A3)+
+            move.w  D7,D0
+            addq.w  #1,D0
+            move.b  D0,(A3)+
+            move.b  #2,(A3)+
+            addq.w  #1,D7
+.L4:
+            moveq   #0,D0
+            move.w  D7,D0
+            moveq   #0,D1
+            move.b  (FlpSectors,A4),D1
+            cmp.l   D0,D1
+            bhi.b   .L3
+            move.b  #$4D,(-$56,A6)
+            move.b  D6,D0
+            lsl.b   #2,D0
+            move.b  D0,(-$54,A6)
+            move.b  (FlpSectors,A4),(-53,A6)
+            move.b  (FlpType,A4),(-$52,A6)
+            move.b  #$3B,(-$51,A6)
+            moveq   #6,D0
+            move.l  D0,-(SP)
+            pea     (-$56,A6)
+            jsr     Floppy_WriteCMD
+            tst.w   D0
+            addq.l  #8,SP
+            bne.b   .PatchLineA_L25
+            moveq   #noAdrMkErr,D0
+            bra.w   .Exit
+.L5:
+            moveq   #0,D0
+            move.w  D7,D0
+            asl.l   #2,D0
+            move.l  D0,-(SP)
+            pea     (-$48,A6)
+            jsr     Floppy_WriteSector
+            tst.w   D0
+            addq.l  #8,SP
+            bne.b   .L6
+            moveq   #badCksmErr,D0
+            bra.w   .Exit
+.L6:
+            moveq   #7,D0
+            move.l  D0,-(SP)
+            pea     (-$50,A6)
+            jsr     Super_Unknown13
+            tst.w   D0
+            addq.l  #8,SP
+            beq.b   .badBtSlp
+            move.w  #$FB,D0
+            and.b   (-$50,A6),D0
+            bne.b   .Underrun
+
+
+
 
 driveready:
-
+            link.w  A6,#-$A
+            movem.l A4-A3/D7,-(SP)
+            movea.l OutboundGlobals,A3
+            moveq   #$20,D0
+            and.b   OutboundFlpBase+$18,D0
+            beq.b   .L1
+            moveq   #0,D0
+            bra.w   .Exit
+.L1:
+            move.b  #$14,OutboundFlpBase+$10
+            move.w  #$80,D0
+            and.b   OutboundFlpBase+8,D0
+            beq.b   .L4
+            tst.b   (FlpStatus,A3)
+            bne.b   .L2
+            moveq   #1<<ExtFloppy,D0                ; Check if an external floppy drive is connected
+            and.b   OutboundCfg,D0
+            beq.b   .L4
+.L2:
+            moveq   #-1,D0
+            cmp.b   (FlpStatus,A3),D0
+            beq.b   .L3
+            subq.l  #4,SP
+            move.w  ($10,A3),-(SP)
+            jsr     Super_Unknown21
+            movea.l (SP)+,A0
+            movea.l (A0),A4
+            or.w    #$2000,(4,A4)
+.L3:
+            clr.b   (FlpStatus,A3)
+            move.w  #volOffLinErr,(FlpLastError,A3)
+            move.b  #$4A,(-$A,A6)
+            moveq   #2,D0
+            move.l  D0,-(SP)
+            pea     (-$A,A6)
+            jsr     Floppy_WriteCMD
+            andi.b  #%10111111,OutboundCfg
+            move.w  ($E,A3),D0
+            moveq   #1,D0
+            lsl.l   D0,D1
+            or.w    D1,BootMask
+            moveq   #0,D0
+            addq.l  #8,SP
+            bra.w   .Exit
+.L4:
+            tst.b   (FlpStatus,A3)
+            bne.w   .L8
+            moveq   #1<<CfgBit5,D0
+            and.b   OutboundCfg,D0
+            beq.b   .PatchLineA_L25
+            moveq   #1<<CfgBit6,D0
+            and.b   OutboundCfg,D0
+            bne.b   .L8
+.L5:
+            moveq   #7,D0
+            move.l  D0,-(SP)
+            pea     (-8,A6)
+            jsr     Super_Unknown13
+            jsr     Super_Unknown30
+            move.b  #1,(FlpStatus,A3)
+            moveq   #0,D0
+            move.l  D0,-(SP)
+            jsr     determinetype
+            move.b  #4,(-$A,A6)
+            clr.b   (-9,A6)
+            moveq   #2,D0
+            move.l  D0,-(SP)
+            pea     (-$A,A6)
+            jsr     Floppy_WriteCMD
+            moveq   #1,D0
+            move.l  D0,-(SP)
+            pea     (-8,A6)
+            jsr     Super_Unknown13
+            moveq   #$40,D0
+            and.b   (-8,A6),D0
+            lea     ($1C,SP),SP
+            beq.b   .L6
+            move.b  #-$80,(4,A3)
+            bra.b   .L7
+.L6:
+            clr.b   (4,A3)
+.L7:
+            subq.l  #2,SP
+            moveq   #7,D0
+            move.w  D0,-(SP)
+            move.w  ($E,A3),D1
+            ext.l   D1
+            move.l  D1,-(SP)
+            jsr     Super_Unknown_PostEvent
+            moveq   #1,D0
+            addq.l  #2,SP
+            bra.b   .Exit
+.L8:
+            moveq   #1,D0
+            cmp.w   ($A,A6),D0
+            bne.b   .L12
+            moveq   #-1,D0
+            cmp.b   (FlpStatus,A3),D0
+            beq.b   .L12
+            tst.w   ($36,A3)
+            bne.b   .L11
+            move.l  #$30000,D7
+            bra.b   .L10
+.L9:
+            subq.l  #1,D7
+.L10:
+            tst.l   D7
+            bne.b   .L9
+            tst.b   (FlpType,A3)                    ; GCR disk?
+            bne.b   .L11                            ; No, skip
+            jsr     Floppy_GCRSync_T
+.L11:
+            move.w  #1,($38,A3)
+            move.w  #1,($36,A3)
+            moveq   #1,D0
+            bra.b   .Exit
+.L12:
+            tst.w   ($32,A3)
+            beq.b   .L13
+            clr.w   ($32,A3)
+            moveq   #1,D0
+            move.l  D0,-(SP)
+            jsr     rwop
+            move.w  D0,(FlpLastError,A3)
+            addq.l  #4,SP
+.L13:
+            move.b  #4,OutboundFlpBase+$40010
+            move.b  #5,$B00003
+            move.b  #$62,$B00003                    ; DTR off, 8 bit, RTS on
+            clr.w   ($36,A3)
+            moveq   #0,D0
+.Exit:
+            movem.l (-$16,A6),D7/A3-A4
+            unlk    A6
+            rts
 determinetype:
-
+            movem.l A4-A3/D7-D5,-(SP)               ; Save registers
+            move.w  ($1A,A6),D5                     ; Operation type?
+            movea.l OutboundGlobals,A3              ; Get pointer to globals
+            clr.b   (FlpCylinder,A3)
+            clr.w   ($32,A3)
+            clr.w   D6
+            lea     Floppy_FormatTable,A4
+            bra.w   .L9
+.L1:
+            move.b  (A4),(FlpType,A3)
+            move.b  (1,A4),($3B,A3)
+            move.b  (2,A4),(FlpSectors,A3)
+            move.b  (3,A4),(FlpSides,A3)
+            move.l  (4,A4),(FlpTrkSize,A3)
+            move.w  (8,A4),($14,A3)
+            clr.b   (FlpCylinder,A3)
+            moveq   #18,D0                          ; High density disk entry?
+            cmp.b   (FlpSectors,A3),D0
+            bne.b   .DoubleDensity                  ; No
+            clr.b   OutboundFlpBase+$40008          ; Setup for high density disks
+            bra.b   .L3
+.DoubleDensity:
+            move.b  #2,OutboundFlpBase+$40008       ; Setup for double density disks
+.L3:
+            tst.b   ($3A,A3)                        ; GCR type
+            bne.b   .L6                             ; No, skip ahead
+            clr.w   D7
+            bra.b   .L5
+.L4:
+            lea     Floppy_Scratch,A0
+            move.b  #1,(A0,D7.w)
+            addq.w  #1,D7
+.L5:
+            cmpi.w  #24,D7
+            bcs.b   .L4
+            jsr     Floppy_GCRSync_T
+.L6:
+            cmpi.w  #1,D5
+            bne.b   .L7
+            jsr     formatcylinder
+.L7:
+            moveq   #0,D0
+            move.l  D0,-(SP)
+            jsr     rwop                            ; Attempt read/write
+            move.w  D0,(FlpLastError,A3)            ; Store error if any
+            addq.l  #4,SP
+            bne.b   .L8                             ; Try the next format if error
+            move.b  #2,(FlpStatus,A3)               ; Mark drive as ready?
+            moveq   #1,D0                           ; Return success
+            bra.b   .Exit
+.L8:
+            addq.w  #1,D6                           ; Increment counter
+            adda.w  #10,A4                          ; Point to next table entry
+.L9:
+            cmpi.w  #5,D6                           ; Reached the end of the table?
+            bcs.w   .L1
+            moveq   #0,D0                           ; Return failure
+.Exit:
+            movem.l (SP)+,D5-D7/A3-A4               ; Restore registers
+            rts
 seek_sense:
             link.w  A6,#-6
             movem.l A4-A3/D7-D6,-(SP)
             lea     (-3,A6),A4
             lea     (-2,A6),A3
+            move.b  ($B,A6),D6
+            move.b  #$F,(-6,A6)
+            clr.b   (-5,A6)
+            move.b  D6,(-4,A6)
+            move.b  #8,(A4)
+            move.b  #-1,(A3)
 
-
+.L2:
+            addq.w  #1,D7
+.L3:
+            cmpi.w  #10000,D7
+            bcs.b   .L1
+.L4:
+            moveq   #0,D0
+.Exit:
+            movem.l (-$16,A6),D6-D7/A3-A4
+            unlk    A6
+            rts
 Super_Install:
             movem.l A6-A0/D7-D0,-(SP)
             movea.l OutboundGlobals,A1
@@ -2577,8 +3114,43 @@ Super_UnknownData:
             dc.b    21                              ; Length byte
             dc.b    "Outbound Floppy Drive"
             dc.b    0,0
-Super_UnknownData2:
-            incbin  'bin/Super_UnknownData2.bin'
+Floppy_FormatTable:
+            ; 1.44MB
+            dc.b    $30
+            dc.b    $15
+            dc.b    18                              ; Sectors per track
+            dc.b    2                               ; Sides
+            dc.l    18432                           ; Bytes per track
+            dc.w    2880
+            ; 800KB
+            dc.b    0
+            dc.b    0
+            dc.b    12                              ; Sectors per track
+            dc.b    2                               ; Sides
+            dc.l    12288                           ; Bytes per track
+            dc.w    1600
+            ; 400KB
+            dc.b    0
+            dc.b    0
+            dc.b    12                              ; Sectors per track
+            dc.b    1                               ; Sides
+            dc.l    6144                            ; Bytes per track
+            dc.w    800
+            ; 720KB
+            dc.b    $54
+            dc.b    $1B
+            dc.b    9                               ; Sectors per track
+            dc.b    2                               ; Sides
+            dc.l    9216                            ; Bytes per track
+            dc.w    1440
+            ; 360KB
+            dc.b    $54,$1B,9,1,0,0,12,0,2,$D0
+            dc.b    $54
+            dc.b    $1B
+            dc.b    9                               ; Sectors per track
+            dc.b    1                               ; Sides
+            dc.l    4608                            ; Bytes per track
+            dc.w    720
 Super_Unknown6:
             movem.l A6-A0/D7-D0,-(SP)
             movea.l #$B00003,A0
@@ -2615,8 +3187,8 @@ Super_Unknown7:
             lea     Super_UnknownData,A1
             suba.l  PtchTblBase,A1
             adda.l  #PtchROMBase,A1
-            jsr     Super_Unknown8
-            jsr     Super_Unknown8
+            jsr     Shared_Unknown1
+            jsr     Shared_Unknown1
             move.w  #24,D0
 .L1:
             move.b  (A1)+,(A0)+
@@ -2663,7 +3235,7 @@ Super_Unknown10:
 ;   Inputs:
 ;
 ;   Outputs:    D0  Result
-Super_Unknown12:
+Floppy_WriteCMD:
             link.w  A6,#0
             movem.l A0/D2-D1,-(SP)
             movea.l ($8,A6),A0
@@ -2691,7 +3263,7 @@ Super_Unknown12:
             movem.l (SP)+,D1-D2/A0
             unlk    A6
             rts
-Super_Unknown13:
+Floppy_ReadResponse:
             link.w  A6,#0
             movem.l A0/D2-D1,-(SP)
             movea.l (8,A6),A0
@@ -2717,7 +3289,7 @@ Super_Unknown13:
             movem.l (SP)+,D1-D2/A0
             unlk    A6
             rts
-Super_Unknown29:
+Floppy_WriteSector:
             link.w  A6,#0
             movem.l A2-A0/D3-D1,-(SP)
             movea.l #OutboundFlpBase+$18,A0
@@ -2746,7 +3318,7 @@ Super_Unknown29:
             movem.l (SP)+,D1-D3/A0-A2
             unlk    A6
             rts
-Super_476:
+Floppy_ReadSector:
             link.w  A6,#0
             movem.l A2-A0/D3-D1,-(SP)
             movea.l #OutboundFlpBase+$18,A0
@@ -2800,26 +3372,26 @@ Super_Unknown30:
             movea.l SP,A3
             move.w  #$700,-(SP)
             movea.l SP,A2
-            bsr.b   Super_540
+            bsr.b   Floppy_WriteCMDWrapper
             tst.w   D0
             beq.b   .L3
             move.w  #$270F,D7
 .L1:
             move.l  D1,-(SP)
             move.l  A4,-(SP)
-            bsr.w   Super_Unknown12
+            bsr.w   Floppy_WriteCMD
             addq.l  #8,SP
             tst.w   D0
             beq.b   .L3
             move.l  D2,-(SP)
             move.l  A3,-(SP)
-            bsr.w   Super_Unknown13
+            bsr.w   Floppy_ReadResponse
             addq.l  #8,SP
             cmpi.w  #$2000,(A3)
             beq.b   .L4
             btst.b  #4,(A3)
             beq.b   .L2
-            bsr.b   Super_540
+            bsr.b   Floppy_WriteCMDWrapper
 .L2:
             dbf     D7,.L1
 .L3:
@@ -2831,10 +3403,10 @@ Super_Unknown30:
             addq.l  #6,SP
             movem.l (SP)+,D1-D2/D7/A2-A4
             rts
-Super_540:
+Floppy_WriteCMDWrapper:
             move.l  D2,-(SP)
             move.l  A2,-(SP)
-            bsr.w   Super_Unknown12
+            bsr.w   Floppy_WriteCMD
             addq.l  #8,SP
             rts
 rwop:
@@ -2848,8 +3420,8 @@ rwop:
             addq.l  #4,SP
             tst.w   D0
             bne.b   .L1
-            moveq   #-$41,D0
-            bra.w   .L19
+            moveq   #offLinErr,D0
+            bra.w   .Exit
 .L1:
             moveq   #1,D0
             move.b  ($2E,A2),D0
@@ -2858,16 +3430,16 @@ rwop:
             addq.l  #4,SP
             tst.w   D0
             bne.b   .L2
-            moveq   #-$50,D0
-            bra.w   .L19
+            moveq   #seekErr,D0
+            bra.w   .Exit
 .L2:
             moveq   #5,D4
-            tst.b   ($3A,A2)
+            tst.b   (FlpType,A2)
             beq.b   .L11
 .L3:
             lea     (-$10,A6),A5
             moveq   #$45,D0
-            cmp.b   ($3D,A2),D7
+            cmp.b   (FlpSides,A2),D7
             beq.b   .L4
             addi.b  #-$80,D0
 .L4:
@@ -2881,43 +3453,43 @@ rwop:
             clr.b   (A5)+
             move.b  D7,(A5)+
             move.b  #2,(A5)+
-            move.b  ($3C,A2),(A5)+
+            move.b  (FlpSectors,A2),(A5)+
             move.b  ($3B,A2),(A5)+
             move.b  #-1,(A5)+
             moveq   #9,D0
             move.l  D0,-(SP)
             pea     (-$10,A6)
-            jsr     Super_Unknown12
+            jsr     Floppy_WriteCMD
             addq.l  #8,SP
             tst.w   D0
             bne.b   .L6
             moveq   #-$47,D0
-            bra.w   .L19
+            bra.w   .Exit
 .L6:
             move.l  ($2A,A2),-(SP)
             move.l  ($26,A2),-(SP)
             cmp.b   D3,D7
             bne.b   .L7
-            jsr     Super_Unknown29
+            jsr     Floppy_WriteSector
             bra.b   .L8
 .L7:
-            jsr     Super_476
+            jsr     Floppy_ReadSector
 .L8:
             addq.l  #8,SP
             moveq   #7,D0
             move.l  D0,-(SP)
             move.l  A5,-(SP)
-            jsr     Super_Unknown13
+            jsr     Floppy_ReadResponse
             addq.l  #8,SP
             tst.w   D0
             bne.b   .L9
-            moveq   #-$49,D0
-            bra.w   .L19
+            moveq   #badDBtSlp,D0
+            bra.w   .Exit
 .L9:
             btst.b  #0,(1,A5)
             beq.b   .L10
-            moveq   #-$43,D0
-            bra.w   .L19
+            moveq   #noAdrMkErr,D0
+            bra.w   .Exit
 .L10:
             moveq   #$44,D0
             cmp.b   (A5)+,D0
@@ -2928,14 +3500,283 @@ rwop:
             moveq   #0,D0
             cmp.b   (A5)+,D0
             bne.w   .L15
+            move.b  ($2E,A2),D0
+            cmp.b   (A5)+,D0
+            bne.w   .L15
+            move.b  (FlpSides,A2),D0
+            subq.b  #1,D0
+            cmp.b   (A5)+,D0
+            bne.b   .L15
+            move.b  (FlpSectors,A2),D0
+            cmp.b   (A5)+,D0
+            bne.b   .L15
+            moveq   #2,D0
+            cmp.b   (A5)+,D0
+            bne.b   .L15
+            bra.w   .L18
+.L11:
+            moveq   #0,D5
+            movea.l ($26,A2),A3
+            lea     Floppy_Scratch,A4
+.L12:
+            lea     (-$10,A6),A5
+            move.b  #4,(A5)+
+            move.b  D5,(A5)+
+            moveq   #2,D0
+            move.l  D0,-(SP)
+            pea     (-$10,A6)
+            jsr     Floppy_WriteCMD
+            addq.l  #8,SP
+            tst.w   D0
+            bne.b   .L13
+            moveq   #noDtaMkErr,D0
+            bra.b   .Exit
+.L13:
+            move.l  A4,-(SP)
+            move.l  D3,-(SP)
+            move.l  A3,-(SP)
+            jsr     Super_0028e894
+            adda.w  #$C,SP
+            move.l  D0,D6
+            move.l  D7,-(SP)
+            move.l  A5,-(SP)
+            jsr     Floppy_ReadResponse
+            addq.l  #8,SP
+            tst.w   D0
+            bne.b   .L14
+            moveq   #badDBtSlp,D0
+            bra.b   .Exit
+.L14:
+            tst.w   D6
+            beq.b   .L15
+            tst.b   D5
+            bne.b   .L18
+            moveq   #4,D5
+            moveq   #0,D0
+            move.b  (FlpSectors,A2),D0
+            adda.l  D0,A4
+            moveq   #9,D1
+            lsl.l   D1,D0
+            adda.l  D0,A3
+            moveq   #5,D4
+            bra.b   .L12
+.L15:
+            tst.l   D4
+            bne.b   .L16
+            moveq   #wrUnderrun,D0
+            bra.b   .Exit
+.L16:
+            subq.l  #1,D4
+            jsr     Super_Unknown30
+            jsr     Floppy_GCRSync_T
+            moveq   #0,D0
+            move.b  ($2E,A2),D0
+            move.l  D0,-(SP)
+            jsr     seek_sense
+            addq.l  #4,SP
+            tst.w   D0
+            bne.b   .L17
+            moveq   #seekErr,D0
+            bra.b   .Exit
+.L17:
+            tst.b   (FlpType,A2)
+            beq.w   .L12
+            bra.w   .L3
+.L18:
+            move.w  #$28,($22,A2)
+            moveq   #0,D0
+.Exit:
+            movem.l (SP)+,D3-D7/A2-A5
+            unlk    A6
+            rts
+Floppy_GCRSync_T:
+            bra.w   Floppy_GCRSync
+FloppyBaudSet1:
+            dc.b    14,0                            ; Write register 14, BR off
+            dc.b    12,$A0
+            dc.b    13,$F
+            dc.b    14,1                            ; Write register 14, BR on
+FloppyBaudSet2:
+            dc.b    14,0                            ; Write register 14, BR off
+            dc.b    12,6
+            dc.b    13,0
+            dc.b    14,1                            ; Write register 14, BR on
+; Write 4 commands (8 bytes) to control channel B
+Floppy_SCCconfigureB:
+            moveq   #8-1,D1                         ; Set loop counter
+.Loop:
+            move.b  (A0)+,$B00003                   ; Write to control channel B
+            dbf     D1,.Loop                        ; Loop until all commands written
+            rts
+Floppy_MeasureZoneTiming:
+            moveq   #-1,D3
+            move.b  D3,(A2)                         ; Start VIA timer
+.L1:
+            btst.b  D6,(A4)                         ; Wait for RxCA set
+            dbne    D3,.L1                          ; Loop until RxCA or timeout
+            beq.b   .Fail                           ; Timeout?
+            moveq   #-1,D3
+.L2:
+            btst.b  D6,(A4)                         ; Wait for RxCA clear
+            dbeq    D3,.L2
+            bne.b   .Fail                           ; Timeout?
+            moveq   #-1,D3
+            move.b  D3,(A1)
+.L3:
+            btst.b  D6,(A4)                         ; Wait for RxCA set
+            dbne    D3,.L3
+            beq.b   .Fail
+            move.b  (A1),D3
+            move.b  (A2),D2
+            cmp.b   (A1),D3
+            beq.b   .L4
+            tst.b   D2
+            bpl.b   .L4
+            subq.b  #1,D3
+.L4:
+            lsl.l   #8,D3
+            move.b  D2,D3
+            neg.l   D3
+            cmp.w   (FlpZoneTime,A6),D3
+            beq.b   .Success
+            rts
+.Success:
+            addq.l  #4,SP
+            bra.w   Floppy_GCRSync_Success
+.Fail:
+            addq.l  #4,SP
+            bra.w   Floppy_GCRSync_Fail
+Super_0028e770:
+            bclr.b  #0,(A3)
+            bra.b   Super_0028e77a
+Super_0028e776:
+            bset.b  #0,(A3)
+Super_0028e77a:
+            moveq   #4,D5
+.L1:
+            dbf     D5,.L1
+            bclr.b  #1,(A3)
+            moveq   #4,D5
+.L2:
+            dbf     D5,.L2
+            bset.b  #1,(A3)
+            rts
+Floppy_GCRSync:
+            link.w  A6,#-8
+            movem.l A5-A0/D7-D1,-(SP)
+            lea     $B00001,A5                      ; SCC write Z85C30
+            lea     $900000,A4                      ; SCC read Z85C30
+            lea     $E0E1FE,A3                      ; Also VIA?
+            lea     OutboundVIA+vT2C,A2             ; VIA T2C
+            lea     ($C8,A2),A1                     ; ???
+            movea.l OutboundGlobals,A0
+            moveq   #5,D6                           ; Configuring write register 5
+            ori.b   #%11,$E0E5FE                    ; ???
+            move    SR,(-6,A6)                      ; Save SR
+            move    #$2300,SR
+            moveq   #-$1E,D1                        ; DTR on, 8-bit, RTS on
+            move.b  D6,(A5)                         ; A channel write register = 5
+            move.b  D1,(A5)                         ; A channel value = $E2
+            move.b  D6,$B00003                      ; B channel write register = 5
+            moveq   #0,D0
+            move.b  (FlpSectors,A0),D0              ; Get current sectors per track
+            cmpi.b  #10,D0                          ; 10 or more sectors?
+            bge.b   .L1                             ; If yes, skip ahead
+            subq.b  #2,D1                           ; Turn RTS off when configuring B
+.L1:
+            move.b  D1,$B00003                      ; B channel value = D1
+            subq.l  #8,D0                           ; Adjust for table
+            lsl.l   #1,D0
+            move.w  (.ZoneTiming,D0),(FlpZoneTime,A6)
+            move.w  (.ZoneTolerance,D0),(FlpZoneTol,A6)
+            move.w  (.VIATiming,D0),(FlpVIATiming,A0)
+            lea     FloppyBaudSet1,A0
+            bsr.w   Floppy_SCCconfigureB
+            moveq   #$32,D7
+.L2:
+            moveq   #$66,D1
+.L3:
+            bsr.w   Floppy_MeasureZoneTiming
+            bhi.b   .L7
+            bsr.w   Super_0028e776
+            dbf     D1,.L3
+            bra.b   Floppy_GCRSync_Fail
+.ZoneTiming:
+            dc.w    1476                            ; 8 sectors
+            dc.w    1312                            ; 9 sectors
+            dc.w    1181                            ; 10 sectors
+            dc.w    1073                            ; 11 sectors
+            dc.w    984                             ; 12 sectors
+.ZoneTolerance:
+            dc.w    28                              ; 8 sectors
+            dc.w    22                              ; 9 sectors
+            dc.w    18                              ; 10 sectors
+            dc.w    15                              ; 11 sectors
+            dc.w    12                              ; 12 sectors
+; Timings for VIA timer 2
+.VIATiming:
+            dc.w    $874A                           ; 8 sectors
+            dc.w    $7845                           ; 9 sectors
+            dc.w    $6C3B                           ; 10 sectors
+            dc.w    $6263                           ; 11 sectors
+            dc.w    $5A34                           ; 12 sectors
+.L7:
+            moveq   #102,D1
+.L8:
+            move.w  D3,(LastSyncTime,A6)
+            bsr.w   Super_0028e770
+            bsr.w   Floppy_MeasureZoneTiming
+            bcs.b   .L9
+            dbf     D1,.L8
+            bra.b   Floppy_GCRSync_Fail
+.L9:
+            sub.w   (FlpZoneTime,A6),D3
+            neg.l   D3
+            move.w  (LastSyncTime,A6),D4
+            sub.w   (FlpZoneTime,A6),D4
+            cmp.w   D3,D4
+            bsr.w   Super_0028e776
+.L10:
+            cmp.w   (FlpZoneTol,A6),D3
+            bls.b   Floppy_GCRSync_Success
+            dbf     D7,.L2
+Floppy_GCRSync_Fail:
+            moveq   #0,D0
+            bra.b   Floppy_GCRSync_Exit
+Floppy_GCRSync_Success:
+            moveq   #1,D0
+Floppy_GCRSync_Exit:
+            lea     FloppyBaudSet2,A0
+            bsr.w   Floppy_SCCconfigureB
+            move    (-6,A6),SR                      ; Restore SR
+            move.b  D6,(A5)                         ; A channel write register = 5
+            move.b  #$62,(A5)                       ; DTR off, 8 bit, RTS on
+            movem.l (SP)+,D1-D7/A0-A5
+            unlk A6
+            rts
+Super_0028e894:
+            link.w  A6,#0
+            movem.l A4-A0/D7-D1,-(SP)
+            move    SR,-(SP)
+            moveq   #0,D0
+            movea.l OutboundGlobals,A3
 
-
+Super_0028eb0c:
+            moveq   #-1,D0
+.L1:
+            btst.b  #0,(A0)
 
 
             
 ;temp
-Super_Unknown8:
 Super_UnknownData5:
+
+Floppy_Scratch:
+            ds.b    25
+
+
+
+
 
 
 Unknown_DFA:
