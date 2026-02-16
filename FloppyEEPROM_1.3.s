@@ -3121,36 +3121,35 @@ Floppy_FormatTable:
             dc.b    18                              ; Sectors per track
             dc.b    2                               ; Sides
             dc.l    18432                           ; Bytes per track
-            dc.w    2880
+            dc.w    2880                            ; Total sectors
             ; 800KB
             dc.b    0
             dc.b    0
             dc.b    12                              ; Sectors per track
             dc.b    2                               ; Sides
             dc.l    12288                           ; Bytes per track
-            dc.w    1600
+            dc.w    1600                            ; Total sectors
             ; 400KB
             dc.b    0
             dc.b    0
             dc.b    12                              ; Sectors per track
             dc.b    1                               ; Sides
             dc.l    6144                            ; Bytes per track
-            dc.w    800
+            dc.w    800                             ; Total sectors
             ; 720KB
             dc.b    $54
             dc.b    $1B
             dc.b    9                               ; Sectors per track
             dc.b    2                               ; Sides
             dc.l    9216                            ; Bytes per track
-            dc.w    1440
+            dc.w    1440                            ; Total sectors
             ; 360KB
-            dc.b    $54,$1B,9,1,0,0,12,0,2,$D0
             dc.b    $54
             dc.b    $1B
             dc.b    9                               ; Sectors per track
             dc.b    1                               ; Sides
             dc.l    4608                            ; Bytes per track
-            dc.w    720
+            dc.w    720                             ; Total sectors
 Super_Unknown6:
             movem.l A6-A0/D7-D0,-(SP)
             movea.l #$B00003,A0
