@@ -1522,7 +1522,7 @@ New_WriteXPRam:
 .DoWrite:
             bsr.w   PRAMWriteOp
             bra.b   .Exit
-CommonUnknown4:
+PatchInitIOMgr8_P3:
             movea.l OutboundGlobals,A1
             move.b  OutboundVIA+vSR,D1
             move.b  #$10,OutboundVIA+vIFR
@@ -1535,7 +1535,7 @@ CommonUnknown4:
             bpl.b   .L4
 .L1:
             btst.l  #1,D0
-            bne.b   CommonUnknown19
+            bne.b   CommonUnknown7_3
             bclr.b  #2,($68,A1)
             beq.b   .L2
             rts
@@ -1550,7 +1550,7 @@ CommonUnknown4:
             move.w  #$4000,D0
 .L3:
             btst.b  #2,OutboundVIA+vIFR
-            bne.b   CommonUnknown4
+            bne.b   PatchInitIOMgr8_P3
             dbf     D0,.L3
             bra.b   CommonUnknown5
 .L4:
@@ -1589,19 +1589,161 @@ CommonUnknown18:
             move.b  ($69,A1),D1
             bsr.b   CommonUnknown6
             not.w   D0
-
+            andi.w  #3,D0
+            move.b  ($6B,A1),D1
+            lsr.b   #6,D1
+            cmp.b   D0,D1
+            bne.b   CommonUnknown5
+            bra.b   CommonUnknown7
 CommonUnknown6:
-
+            andi.w  #$3F,D1
+            bset.l  #7,D1
+            lsr.b   #1,D1
+.L1:
+            addx.b  D2,D0
+            lsr.b   #1,D1
+            bne.b   .L1
+            rts
 CommonUnknown7:
+            bsr.w   CommonUnknown7_2
+            tst.l   ($AA,A1)
+            beq.b   .L1
+            pea     .L1
+            move.l  ($AA,A1),-(SP)
+            rts
+.L1:
+            tst.l   ($B2,A1)
+            beq.b   .L2
+            pea     .L2
+            move.l  ($B2,A1),-(SP)
+            rts
+.L2:
+            move.b  ($69,A1),D1
+            andi.w  #$3F,D1
+            cmpi.b  #$20,D1
+            bne.b   .L3
+            clr.b   D1
+            bra.b   .L4
+.L3:
+            btst.l  #5,D1
+            beq.b   .L4
+            ori.b   #-$20,D1
+.L4:
+            ext.w   D1
+            btst.b  #2,($75,A1)
+            bne.b   .L5
+            btst.b  #1,($75,A1)
+            bne.b   .L5
+            add.w   D1,$82A
+.L5:
+            move.b  ($6E,A1),($78,A1)
+            move.b  D1,($6E,A1)
+            move.b  ($6B,A1),D1
+            andi.w  #$3F,D1
+            cmpi.b  #$20,D1
+            bne.b   .L6
+            clr.b   D1
+            bra.b   .L7
+.L6:
+            btst.l  #5,D1
+            beq.b   .L7
+            ori.w   #$E0,D1
+.L7:
+            ext.w   D1
+            add.w   D1,MTemp
+            move.b  D1,($6F,A1)
+            move.b  CrsrCouple,CrsrNew
+            move.l  Ticks,($70,A1)
+            rts
+CommonUnknown7_3:
+            bset.b  #2,($68,A1)
+            bsr.w   CommonUnknown7_4
+            bclr.b  #2,($68,A1)
+            bclr.b  #1,($68,A1)
+            move.b  D1,($6B,A1)
+            tst.b   ($6A,A1)
+            beq.w   CommonUnknown7_7
+            move.b  ($6A,A1),D0
+            move.b  D0,D1
+            lsr.b   #1,D0
 
-CommonUnknown19:
 
-CommonUnknown7_2:
+            
+
+
 
 CommonUnknown8:
 
-PatchInitIOMgr8:
+PatchInitIOMgr8_P1:
+            bclr.b  #4,(vACR,A1)
+            btst.b  #2,(vIFR,A1)
+            beq.b   .L1
 
+PatchInitIOMgr8_Exit:
+            rts
+PatchInitIOMgr8_P4:
+            movem.l A1-A0,-(SP)
+            movea.l OutboundGlobals,A0
+            lea     OutboundVIA,A1
+            move.b  (vACR,A1),D0
+            andi.b  #-$1D,D0
+            move.b  D0,(vACR,A1)
+            tst.b   (vSR,A1)
+            ori.b   #$C,D0
+            move.b  D0,(vACR,A1)
+            tst.b   (vSR,A1)
+            clr.b   ($6D,A0)
+            move.b  #$10,(vIFR,A1)
+            movem.l (SP)+,A0-A1
+            rts
+PatchInitIOMgr8_P2:
+            btst.b  #2,OutboundVIA+vBufA
+            beq.b   .L1
+            movem.l A6-A0/D7-D0,-(SP)
+            bsr.w   PatchInitIOMgr8_P3
+            movem.l (SP)+,D0-D7/A0-A6
+.L1:
+            pea     PatchInitIOMgr8_P3
+            move.l  (SP)+,$19A
+            btst.b  #IsMacSEROM,OutboundCfg
+            beq.b   .L2
+            jmp     OneSecInt
+.L2:
+            jmp     BusError
+PatchInitIOMgr8:
+            movem.l A1-A0/D1-D0,-(SP)
+            move    SR,D1
+            move    #$2700,SR
+            lea     OutboundVIA,A1
+            bset.b  #6,(vDIRA,A1)
+            bset.b  #6,(vBufA,A1)
+            lea     PatchInitIOMgr8_Exit,A0
+            move.l  A0,JKybdTask
+            move.b  #1,KbdType
+            lea     PatchInitIOMgr8_P1,A0
+            move.l  A0,$196
+            lea     PatchInitIOMgr8_P2,A0
+            move.l  A0,Lvl1DT
+            move.b  #$80,MBState
+            bclr.b  #CfgBit4,OutboundCfg
+            move.b  #$C,(vACR,A1)
+            move.b  #$84,(vIER,A1)
+            move.b  (vPCR,A1),D0
+            andi.b  #$F,D0
+            move.b  D0,(vPCR,A1)
+            move.b  (vSR,A1),D0
+            lea     PatchInitIOMgr8_P2,A0
+            move.l  A0,$19A
+            move    D1,SR
+            movea.l OutboundGlobals,A0
+            move.b  #6,($7A,A0)
+            move.b  #1,($7B,A0)
+            move.b  #1,($99,A0)
+            move.b  #2,($9A,A0)
+            move.l  MinusOne,($9C,A0)
+            clr.l   ($B8,A0)
+            movem.l (SP)+,D0-D1/A0-A1
+            rts
 ; DrawWallaby
 ;
 ; Draws the Wallaby logo on the Outbound's built in display 
@@ -1779,7 +1921,7 @@ Super_Unknown25:
             jsr     Super_Unknown26
             move.l  D1,D0
             rts
-Super_Unknown_VInstall:
+Super_VInstall:
             movea.l (SP)+,A1
             movea.l (SP)+,A0
             _VInstall
@@ -2137,7 +2279,7 @@ RamDisk_Unknown9:
             btst.l  #0,D2
             beq.b   .L9
             move.b  (A0)+,D1
-            cmpb    (A1),D1
+            cmp.b    (A1),D1
             bne.b   RamDisk_VerifyError
             subq.w  #6,A1
             bra.b   .L10
@@ -2514,17 +2656,17 @@ floppyopen:
             move.l  D0,-(SP)
             pea     (-4,A6)
             jsr     Floppy_WriteCMD
-            clr.b   (5,A3)
+            clr.b   (FlpStatus,A3)
             move.b  #1,(6,A3)
             move.b  #-1,(7,A3)
             clr.w   ($C,A3)
-            move.w  #$FFBF,(30,A3)
+            move.w  #$FFBF,(FlpLastError,A3)
             clr.w   ($34,A3)
             move.w  #1,($38,A3)
             move.w  #1,($36,A3)
             clr.w   ($32,A3)
             move.b  #$50,($3E,A3)
-            move.b  #$30,($3A,A3)
+            move.b  #$30,(FlpType,A3)
             move.l  #$4800,($2A,A3)
             jsr     Super_Unknown30
             move.b  $4A,(-4,A6)
@@ -2577,17 +2719,17 @@ floppycontrol:
             moveq   #0,D0
             move.l  D0,-(SP)
             jsr     driveready
-            move.b  #-1,(5,A4)
+            move.b  #-1,(FlpStatus,A4)
             moveq   #1<<CfgBit5,D0
             and.b   OutboundCfg,D0
             addq.l  #4,SP
             beq.b   .L4
-            ori.b   #1<<CfgBit6,OutboundCfg
+            ori.b   #1<<FlpOffline,OutboundCfg
             clr.b   (5,A4)
             moveq   #-$11,D0
             bra.w   .Exit
 .L4:
-            move.w  ($30,A4),D0
+            move.w  (FlpLastError,A4),D0
             bra.w   .Exit
 .PhysIcon:
             movea.l ($C,A6),A0
@@ -2646,7 +2788,25 @@ floppystatus:
             movea.l (8,A6),A4
             movea.l OutboundGlobals,A3
             move.w  ($1A,A4),D0
+            subq.w  #8,D0
+            bmi.w   .L8
+            cmpi.w  #2,D0
+            bgt.w   .L8
+            add.w   D0,D0
+            move.w  (.L1,PC,D0),D0
+            jmp     (.Jmp,PC,D0)
+.Jmp        EQU     .L1-2
+.L1:
+            dc.w    .L2-.Jmp
+            dc.w    .L8-.Jmp
+            dc.w    .L6-.Jmp
+.L2:
+            moveq   #0,D0
+            move.b  (FlpCylinder,A3),D0
+            move.w  D0,(-$16,A6)
+            move.b  (4,A3),(-$14,A6)
 
+; readwriteop
 readwriteop:
             link.w  A6,#0
             movem.l A4-A3/D7-D3,-(SP)
@@ -2656,12 +2816,13 @@ readwriteop:
             movea.l OutboundGlobals,A3
             move.b  ($F,A6),D0
 
+; verifydisk
 verifydisk:
             movem.l A3/D7,-(SP)
             movea.l OutboundGlobals,A3
             move.b  ($3E,A3),D0
             subq.b  #1,D0
-            move.b  D0,($2E,A3)
+            move.b  D0,(FlpCylinder,A3)
             bra.w   .L6
 .L1:
             tst.b   ($3A,A3)
@@ -2670,6 +2831,7 @@ verifydisk:
             bra.b   .L3
 .L2:
 
+; formatdisk
 formatdisk:
             move.l  A3,-(SP)                        ; Save A3
             movea.l OutboundGlobals,A3
@@ -2695,20 +2857,21 @@ formatdisk:
             bra.b   .L5
 .L3:
             jsr     formatcylinder
-            move.w  D0,($30,A3)
+            move.w  D0,(FlpLastError,A3)
             beq.b   .L4
-            move.w  ($30,A3),D0
+            move.w  (FlpLastError,A3),D0
             bra.b   .Exit
 .L4:
-            addq.b  #1,($2E,A3)
+            addq.b  #1,(FlpCylinder,A3)
 .L5:
-            move.b  ($2E,A3),D0
+            move.b  (FlpCylinder,A3),D0
             cmp.b   ($3E,A3),D0
             bcs.b   .L3
             moveq   #0,D0
 .Exit:
             movea.l (SP)+,A3                        ; Restore A3
             rts
+; formatcylinder
 formatcylinder:
             link.w  A6,#-$56
             movem.l A4-A3/D7-D6,-(SP)
@@ -2785,10 +2948,98 @@ formatcylinder:
             move.w  #$FB,D0
             and.b   (-$50,A6),D0
             bne.b   .Underrun
-
-
-
-
+            tst.b   (-$4F,A6)
+            bne.b   .Underrun
+            tst.b   (-$4E,A6)
+            bne.b   .Underrun
+            move.b  (-$4D,A6),D0
+            cmp.b   (FlpCylinder,A4),D0
+            bne.b   .Underrun
+            move.b  (-$4B,A6),D0
+            cmp.b   (FlpSectors,A4),D0
+            bne.b   .Underrun
+            moveq   #2,D0
+            cmp.b   (-$4A,A6),d0
+            beq.b   .L15
+.Underrun:
+            moveq   #wrUnderrun,D0
+            bra.w   .Exit
+.badBtSlp:
+            moveq   #badBtSlpErr,D0
+            bra.w   .Exit
+.GCR:
+            moveq   #0,D0
+            move.b  (FlpCylinder,A4),D0
+            lsr.l   #4,D0
+            moveq   #$C,D1
+            sub.l   D1,D0
+            moveq   #0,D0
+            move.b  (FlpSectors,A4),D0
+            cmp.l   D1,D0
+            beq.b   .L10
+            moveq   #0,D0
+            move.b  (FlpCylinder,A4),D0
+            lsr.l   #4,D0
+            moveq   #$C,D1
+            sub.l   D0,D1
+            move.b  D1,(FlpSectors,A4)
+            jsr     Floppy_GCRSync_T
+            tst.w   D0
+            bne.b   .L10
+            moveq   #spdAdjErr,D0
+            bra.b   .Exit
+.L10:
+            move.b  #4,(-$56,A6)
+            move.b  D6,D0
+            lsl.b   #2,D0
+            move.b  D0,(-$55,A6)
+            moveq   #2,D0
+            move.l  D0,-(SP)
+            pea     (-$56,A6)
+            jsr     Floppy_WriteCMD
+            tst.w   D0
+            addq.l  #8,SP
+            bne.b   .L11
+            moveq   #noDtaMkErr,D0
+            bra.b   .Exit
+.L11:
+            moveq   #0,D0
+            move.b  D6,D0
+            move.l  D0,-(SP)
+            jsr     Floppy_GCRFormatTrack
+            tst.w   D0
+            addq.l  #4,SP
+            bne.b   .L12
+            moveq   #wrUnderrun,D0
+            bra.b   .Exit
+.L12:
+            moveq   #1,D0
+            move.l  D0,-(SP)
+            pea     (-$50,A6)
+            jsr     Super_Unknown13
+            tst.w   D0
+            addq.l  #8,SP
+            bne.b   .L13
+            moveq   #badDBtSlp,D0
+            bra.b   .Exit
+.L13:
+            move.w  #5000,D7
+.L14:
+            move.w  D7,D0
+            subq.w  #1,D7
+            tst.w   D0
+            bne.b   .L14
+.L15:
+            addq.b  #1,D6
+.L16:
+            cmp.b   (FlpSidesmA4),D6
+            bcs.w   .L2
+            moveq   #0,D0
+.Exit:
+            movem.l (-$66,A6),D6-D7/A3-A4
+            unlk    A6
+            rts
+; driveready
 driveready:
             link.w  A6,#-$A
             movem.l A4-A3/D7,-(SP)
@@ -2826,7 +3077,7 @@ driveready:
             move.l  D0,-(SP)
             pea     (-$A,A6)
             jsr     Floppy_WriteCMD
-            andi.b  #%10111111,OutboundCfg
+            andi.b  #~(1<<FlpOffline),OutboundCfg
             move.w  ($E,A3),D0
             moveq   #1,D0
             lsl.l   D0,D1
@@ -2840,7 +3091,7 @@ driveready:
             moveq   #1<<CfgBit5,D0
             and.b   OutboundCfg,D0
             beq.b   .PatchLineA_L25
-            moveq   #1<<CfgBit6,D0
+            moveq   #1<<FlpOffline,D0
             and.b   OutboundCfg,D0
             bne.b   .L8
 .L5:
@@ -2925,6 +3176,7 @@ driveready:
             movem.l (-$16,A6),D7/A3-A4
             unlk    A6
             rts
+; determinetype
 determinetype:
             movem.l A4-A3/D7-D5,-(SP)               ; Save registers
             move.w  ($1A,A6),D5                     ; Operation type?
@@ -2986,6 +3238,7 @@ determinetype:
 .Exit:
             movem.l (SP)+,D5-D7/A3-A4               ; Restore registers
             rts
+; seek_sense
 seek_sense:
             link.w  A6,#-6
             movem.l A4-A3/D7-D6,-(SP)
@@ -3196,7 +3449,7 @@ Super_Unknown7:
             rts
 Super_Unknown9:
             movem.l A6-A0/D7-D0,-(SP)
-            lea     Super_UnknownData5,A0
+            lea     Floppy_GCRData1,A0
             lea     Super_UnknownData,A1
             movea.l A1,A2
             move.w  #255,D0
@@ -3230,7 +3483,7 @@ Super_Unknown10:
 .Exit:
             movem.l (SP)+,D0-D7/A0-A6
             rts
-; 
+; Floppy_WriteCMD
 ;   Inputs:
 ;
 ;   Outputs:    D0  Result
@@ -3243,7 +3496,7 @@ Floppy_WriteCMD:
 .L1:
             move.l  #100000,D1
 .L2:
-            move.b  $C80018,D2
+            move.b  OutboundFlpBase+$18,D2
             bmi.b   .L4
             btst.l  #5,D2
             bne.b   .L3
@@ -3262,6 +3515,7 @@ Floppy_WriteCMD:
             movem.l (SP)+,D1-D2/A0
             unlk    A6
             rts
+; Floppy_ReadResponse
 Floppy_ReadResponse:
             link.w  A6,#0
             movem.l A0/D2-D1,-(SP)
@@ -3288,6 +3542,7 @@ Floppy_ReadResponse:
             movem.l (SP)+,D1-D2/A0
             unlk    A6
             rts
+; Floppy_WriteSector
 Floppy_WriteSector:
             link.w  A6,#0
             movem.l A2-A0/D3-D1,-(SP)
@@ -3317,6 +3572,7 @@ Floppy_WriteSector:
             movem.l (SP)+,D1-D3/A0-A2
             unlk    A6
             rts
+; Floppy_ReadSector
 Floppy_ReadSector:
             link.w  A6,#0
             movem.l A2-A0/D3-D1,-(SP)
@@ -3402,6 +3658,7 @@ Super_Unknown30:
             addq.l  #6,SP
             movem.l (SP)+,D1-D2/D7/A2-A4
             rts
+; Floppy_WriteCMDWrapper
 Floppy_WriteCMDWrapper:
             move.l  D2,-(SP)
             move.l  A2,-(SP)
@@ -3590,11 +3847,13 @@ rwop:
             rts
 Floppy_GCRSync_T:
             bra.w   Floppy_GCRSync
+; Baud rate config for slow speed
 FloppyBaudSet1:
             dc.b    14,0                            ; Write register 14, BR off
             dc.b    12,$A0
             dc.b    13,$F
             dc.b    14,1                            ; Write register 14, BR on
+; Baud rate config for regular speed
 FloppyBaudSet2:
             dc.b    14,0                            ; Write register 14, BR off
             dc.b    12,6
@@ -3759,33 +4018,406 @@ Super_0028e894:
             move    SR,-(SP)
             moveq   #0,D0
             movea.l OutboundGlobals,A3
-
-Super_0028eb0c:
+            move.b  (FlpSectors,A3),D0
+            subq.l  #1,D0
+            clr.w   -(SP)
+            movea.l ($10,A6),A4
+.L1:
+            move.b  (A4)+,D1
+            tst.b   ($F,A6)
+            beq.b   .L2
+            lsr.b   #2,D1
+.L2:
+            andi.b  #3,D1
+            cmpi.b  #1,D1
+            bne.b   .L3
+            addq.w  #1,(SP)
+.L3:
+            dbf     D0,.L1
+            moveq   #1,D0
+            tst.w   (SP)
+            beq.w   Super_0028ecf6
+            tst.b   ($F,A6)
+            beq.b   .L5
+            move.w  #25000,D0
+.L4:
+            dbf     D0,.L4
+.L5:
+            moveq   #0,D7
+            movea.l OutboundGlobals,A3
+            move.b  (FlpSectors,A3),D7
+            lsl.w   #6,D7
+.L6:
+            swap    D7
+            movea.l #$900000,A0
+            movea.l #$90000C,A1
+            lea     Super_UnknownData,A2
+            move    (2,SP),SR
+            move.b  #3,$B00001
+            move.b  #$D1,$B00001
+            bsr.w   Floppy_GCRReadByte
+            move    #$2300,SR
+            tst.b   D0
+            beq.b   .L8
+Floppy_ErrorReset:
+            move    (2,SP),SR
+            move.b  #3,$B00001
+            move.b  #$C0,$B00001
+            bset.b  #5,$E0FFFE
+            move.b  #5,$B00001
+            move.b  #$62,$B00001
+            move.b  #$30,$B00001                    ; Clear errors
+            move.b  #$C0,$B00001                    ; Force reset
+            swap    D7
+            dbf     D7,.L6
+            bra.w   Floppy_ErrorExit
+.L8:
+            moveq   #0,D5
+            bsr.w   Floppy_GCRReadByte
+            move.l  D0,D1
+            eor.b   D1,D5
+            bsr.w   Floppy_GCRReadByte
+            move.l  D0,D2
+            eor.b   D2,D5
+            bsr.w   Floppy_GCRReadByte
+            move.l  D0,D3
+            eor.b   D3,D5
+            bsr.w   Floppy_GCRReadByte
+            move.l  D0,D4
+            eor.b   D4,D5
+            bsr.w   Floppy_GCRReadByte
+            eor.b   D0,D5
+            bne.b   Floppy_ErrorReset
+            bsr.w   Floppy_GCRReadByte
+            cmpi.b  #$27,D0
+            bne.b   Floppy_ErrorReset
+            bsr.w   Floppy_GCRReadByte
+            cmpi.b  #$55,D0
+            bne.b   Floppy_ErrorReset
+            move.b  #3,$B00001
+            move.b  #$C0,$B00001
+            movea.l ($10,A6),A4
+            adda.l  D2,A4
+            tst.b   ($F,A6)
+            bne.w   Super_0028eb2a
+            btst.b  #1,(A4)
+            bne.w   Floppy_ErrorReset
+            move.b  #3,$B00001
+            move.b  #$D1,$B00001
+            btst.l  #0,D3
+            beq.b   .L9
+            ori.b   #$40,D1
+.L9:
+            movea.l OutboundGlobals,A3
+            move.b  (FlpCylinder,A3),D0
+            cmp.b   D0,D1
+            bne.w   Floppy_ErrorExit
+            andi.w  #$20,D4
+            lsr.w   #5,D4
+            addq.b  #1,D4
+            move.b  (FlpSides,A3),D0
+            cmp.b   D0,D4
+            bne.w   Floppy_ErrorExit
+            bsr.w   Floppy_GCRReadByte
+            cmpi.b  #$B,D0
+            bne.w   Floppy_ErrorReset
+            bsr.w   Floppy_GCRReadByte
+            cmp.b   D2,D0
+            bne.w   Floppy_ErrorReset
+            movea.l (8,A6),A3
+            moveq   #9,D1
+            lsl     D1,D2
+            adda.l  D2,A3
+            moveq   #0,D1
+            moveq   #0,D2
+            moveq   #0,D3
+            moveq   #0,D4
+            moveq   #0,D5
+            moveq   #0,D6
+            move.w  #$AF,D7
+.L10:
+            bsr.w   Floppy_GCRReadByte
+            move.b  D0,D4
+            bsr.w   Floppy_GCRReadByte
+            lsl.b   #2,D4
+            move.b  D4,D5
+            andi.b  #$C0,D5
+            or.b    D0,D5
+            bsr.w   Floppy_GCRReadByte
+            lsl.b   #2,D4
+            move.b  D4,D6
+            andi.b  #$C0,D6
+            or.b    D0,D6
+            cmpi.w  #1,D7
+            beq.b   .L11
+            bsr.w   Floppy_GCRReadByte
+            lsl.b   #2,D4
+            or.b    D4,D0
+            tst.w   D7
+            beq.b   .L15
+.L11:
+            rol.b   #1,D1
+            bcc.b   .L12
+            addq.w  #1,D2
+.L12:
+            eor.b   D1,D5
+            move.b  D5,(A3)+
+            add.w   D5,D2
+            btst.l  #8,D2
+            beq.b   .L13
+            addq.w  #1,D3
+.L13:
+            andi.w  #$FF,D3
+            eor.b   D2,D6
+            move.b  D6,(A3)+
+            add.w   D6,D3
+            cmpi.w  #1,D7
+            beq.b   .L15
+            btst.l  #8,D3
+            beq.b   .L14
+            addq.b  #1,D1
+.L14:
+            andi.w  #$FF,D3
+            eor.b   D3,D0
+            move.b  D0,(A3)+
+            add.b   D0,D1
+            cmpi.w  #$AC,D7
+            bne.b   .L15
+            suba.w  #$C,A3
+.L15:
+            dbf     D7,.L10
+            move.b  D0,D4
+            cmp.b   D1,D4
+            bne.b   .L16
+            cmp.b   D2,D5
+            bne.b   .L16
+            cmp.b   D3,D6
+            bne.b   .L16
+            bsr.b   Floppy_GCRReadByte
+            cmpi.b  #$27,D0
+            bne.w   Floppy_ErrorReset
+            bsr.b   Floppy_GCRReadByte
+            cmpi.b  #$55,D0
+            bne.w   Floppy_ErrorReset
+            move.b  #3,$B00001
+            move.b  #$C0,$B00001
+            bset.b  #1,(A4)
+            btst.b  #0,(A4)
+            beq.w   Super_0028e894\.L5
+            subi.w  #1,(SP)
+            bne.w   Super_0028e894\.L5
+            moveq   #1,D0
+            bra.w   Super_0028ecf6
+.L16:
+            movea.l OutboundGlobals,A4
+            addq.l  #1,($40,A4)
+            bra.w   Floppy_ErrorReset
+Floppy_GCRReadByte:
             moveq   #-1,D0
 .L1:
             btst.b  #0,(A0)
+            dbne    D0,.L1
+            beq.b   .L2
+            moveq   #0,D0
+            move.b  (A1),D0
+            move.b  (A2,D0.w),D0
+            rts
+.L2:
+            lea     Floppy_ErrorExit,A2
+            move.l  A2,(SP)
+            rts
+Super_0028eb2a:
+            move.b  (A4),D0
+            andi.b  #$C,D0
+            cmpi.b  #4,D0
+            bne.w   Floppy_ErrorReset
+            btst.l  #0,D3
+            beq.b   .L1
+            ori.b   #$40,D1
+.L1:
+            movea.l OutboundGlobals,A3
+            move.b  (FlpCylinder,A3),D0
+            cmp.b   D0,D1
+            bne.w   Floppy_ErrorExit
+            move.b  (FlpVIATiming+1,A3),OutboundVIA+vT2C
+            move.b  (FlpVIATiming,A3),OutboundVIA+vT2CH
+            movea.l #$B0000D,A1
+            lea     Floppy_GCRData1,A2
+            lea     Floppy_GCRData2,A3
+            move.b  (A3)+,D0
+            andi.w  #$FF,D0
+            move.b  (A2,D0.w),(A1)
+            move.b  #5,$B00001
+            move.b  #$6A,$B00001
+            bclr.b  #5,$E0FFFE
+            move.w  #$A,D7
+.L2:
+            move.b  (A3)+,D0
+            bsr.w   Super_0028ecb6
+            dbf     D7,.L2
+            move.b  D2,D0
+            bsr.w   Super_0028ecb6
+            move.w  #$F,D7
+.L3:
+            moveq   #0,D0
+            bsr.w   Super_0028ecb6
+            dbf     D7,.L3
+            movea.l (8,A6),A3
+            moveq   #9,D1
+            lsl.l   D1,D2
+            adda.l  D2,A3
+            moveq   #0,D1
+            moveq   #0,D2
+            moveq   #0,D3
+            moveq   #0,D4
+            moveq   #0,D5
+            moveq   #0,D6
+            move.w  #$AB,D7
+.L4:
+            tst.w   D7
+            bne.b   .L5
+            move.b  D1,D6
+            move.b  D2,D4
+            move.b  D3,D5
+            bra.b   .L9
+.L5:
+            rol.b   #1,D1
+            bcc.b   .L6
+            addq.w  #1,D2
+.L6:
+            move.b  (A3)+,D4
+            add.w   D4,D2
+            eor.b   D1,D4
+            btst.l  #8,D2
+            beq.b   .L7
+            addq.w  #1,D3
+            andi.w  #$FF,D2
+.L7:
+            move.b  (A3)+,D5
+            add.w   D5,D3
+            eor.b   D2,D5
+            cmpi.w  #1,D7
+            beq.b   .L9
+            btst.l  #8,D3
+            beq.b   .L8
+            addq.b  #1,D1
+            andi.w  #$FF,D3
+.L8:
+            move.b  (A3)+,D6
+            add.b   D6,D1
+            eor.b   D3,D6
+.L9:
+            move.b  D6,D0
+            swap    D6
+            lsr.b   #2,D0
+            move.b  D5,D6
+            andi.b  #$C0,D6
+            or.b    D6,D0
+            lsr.b   #2,D0
+            move.b  D4,D6
+            andi.b  #$C0,D6
+            or.b    D6,D0
+            swap    D6
+            lsr.b   #2,D0
+            andi.w  #$FF,D0
+            move.b  (A2,D0.w),D0
+            swap    D0
+            move.w  #-1,D0
+.L10:
+            btst.b  #2,(A0)
+            dbne    D0,.L10
+            beq.w   Floppy_ErrorExit
+            swap    D0
+            move.b  D0,(A1)
+            move.b  D4,D0
+            andi.b  #$3F,D0
+            bsr.b   Super_0028ecb6
+            move.b  D5,D0
+            andi.b  #$3F,D0
+            bsr.b   Super_0028ecb6
+            cmpi.w  #1,D7
+            beq.b   .L11
+            move.b  D6,D0
+            andi.b  #$3F,D0
+            bsr.b   Super_0028ecb6
+.L11:
+            dbf     D7,.L4
+            moveq   #$27,D0
+            bsr.b   Super_0028ecb6
+            moveq   #$40,D0
+            bsr.b   Super_0028ecb6
+            lea     Floppy_GCRData3,A3
+            move.w  #5,D7
+.L12:
+            move.b  (A3)+,D0
+            bsr.b   Super_0028ecb6
+            dbf     D7,.L12
+            bset.b  #5,$E0FFFE
+            move.b  #5,$B00001
+            move.b  #$62,$B00001
+            movea.l #$90000C,A1
+            lea     Super_UnknownData,A2
+            bset.b  #3,(A4)
+            subi.w  #1,(SP)
+            bne.w   Super_0028e922\.L5
+            moveq   #1,D0
+            bra.b   Super_0028ecf6
+Super_0028ecb6:
+            andi.w  #$FF,D0
+            move.b  (A2,D0),D0
+            swap    D0
+            move.w  #-1,D0
+.L1:
+            btst.b  #2,(A0)
+            dbne    D0,.L1
+            beq.b   .L3
+            move.b  OutboundVIA+vT2CH,D0
+            bpl.b   .L2
+            addq.b  #1,D0
+            bne.b   .L2
+            move.b  OutboundVIA+vT2CH,D0
+            addq.b  #1,D0
+            beq.b   .L3
+.L2:
+            swap    D0
+            move.b  D0,(A1)
+            rts
+.L3:
+            swap    D0
+            lea     Floppy_ErrorExit,A2
+            move.l  A2,(SP)
+            rts
+Floppy_ErrorExit:
+            moveq   #0,D0
+Super_0028ecf6:
+            move.b  #3,$B00001
+            move.b  #$C0,$B00001
+            bset.b  #5,$E0FFFE
+            move.b  #5,$B00001
+            move.b  #$62,$B00001
+            addq.l  #2,SP
+            move    (SP)+,SR
+            movem.l (SP)+,D1-D7/A0-A4
+            unlk    A6
+            rts
+Floppy_GCRData1:
 
-
-            
-;temp
-Super_UnknownData5:
-
+Floppy_GCRData2:
+            dc.b    $34,$3C,$3F
+Floppy_GCRData3:
+            dc.b    $3F,$42,$1E
+            dc.b    $34,$3C,$3F
+            dc.b    $41,$40,$0B
 Floppy_Scratch:
             ds.b    25
-
-
-
-
-
-
-Unknown_DFA:
+Floppy_GCRFormatTrack:
             link.w  A6,#0
             movem.l A4-A2/D6-D3,-(SP)
             move    SR,-(SP)
             move    #$2300,SR
             movea.l #$900000,A0
             movea.l #$B0000D,A1
-            lea     Super_UnknownData5,A2
+            lea     Floppy_GCRData1,A2
             moveq   #0,D7
             movea.l OutboundGlobals,A3
             move.b  ($3C,A3),D7
@@ -3816,19 +4448,110 @@ Unknown_DFA:
             move.b  #5,$B00001
             move.b  #$6A,$B00001
             bclr.b  #5,$E0FFFE
-
-Unknown_F56:
+            moveq   #$7F,D6
+.L5:
+            lea     Data_FAA,A3
+            moveq   #5,D5
+.L6:
+            move.b  (A3)+,D1
+            bsr.w   Floppy_GCRWriteByte
+            dbf     D5,.L6
+            dbf     D6,.L5
+.L7:
+            moveq   #6,D6
+.L8:
+            lea     Data_FAA,A3
+            moveq   #5,D5
+.L9:
+            move.b  (A3)+,D1
+            bsr.w   Floppy_GCRWriteByte
+            dbf     D5,.L9
+            dbf     D6,.L8
+            lea     Data_FB0,A3
+            move.b  (A3)+,D1
+            bsr.w   Floppy_GCRWriteByte
+            move.b  (A3)+,D1
+            bsr.w   Floppy_GCRWriteByte
+            move.b  (A3)+,D1
+            bsr.w   Floppy_GCRWriteByte
+            addq.l  #1,A3
+            moveq   #$22,D2
+            move.l  D3,D1
+            eor.b   D1,D2
+            move.b  (A2,D1),D1
+            bsr.w   Floppy_GCRWriteByte
+            move.b  (A4),D1
+            eor.b   D1,D2
+            move.b  (A2,D1),D1
+            bsr.w   Floppy_GCRWriteByte
+            move.l  D4,D1
+            eor.b   D1,D2
+            move.b  (A2,D1),D1
+            bsr.b   Floppy_GCRWriteByte
+            moveq   #$22,D1
+            move.b  (A2,D1),D1
+            bsr.b   Floppy_GCRWriteByte
+            move.b  D2,D1
+            move.b  (A2,D1),D1
+            bsr.b   Floppy_GCRWriteByte
+            move.b  (A3)+,D1
+            bsr.b   Floppy_GCRWriteByte
+            move.b  (A3)+,D1
+            bsr.b   Floppy_GCRWriteByte
+            moveq   #1,D6
+.L10:
+            lea     Data_FAA,A3
+            moveq   #5,D5
+.L11:
+            move.b  (A3)+,D1
+            bsr.b   Floppy_GCRWriteByte
+            dbf     D5,.L11
+            dbf     D6,.L10
+            lea     Data_FB0,A3
+            move.b  (A3)+,D1
+            bsr.b   Floppy_GCRWriteByte
+            move.b  (A3)+,D1
+            bsr.b   Floppy_GCRWriteByte
+            addq.l  #1,D3
+            move.b  (A3)+,D1
+            bsr.b   Floppy_GCRWriteByte
+            move.b  (A4)+,D1
+            move.b  (A2,D1),D1
+            bsr.b   Floppy_GCRWriteByte
+            moveq   #105,D1
+            move.w  #702,D5
+.L12:
+            bsr.b   Floppy_GCRWriteByte
+            dbf     D5,.L12
+            move.b  (A3)+,D1
+            bsr.b   Floppy_GCRWriteByte
+            move.b  (A3)+,D1
+            bsr.b   Floppy_GCRWriteByte
+            dbf     D7,.L7
+            moveq   #1,D6
+.L13:
+            lea     Data_FAA,A3
+            moveq   #5,D5
+.L14:
+            move.b  (A3)+,D1
+            bsr.b   Floppy_GCRWriteByte
+            dbf     D5,.L14
+            dbf     D6,.L13
+            moveq   #1,D0
+            bra.b   Floppy_GCRFormatTrack_Exit
+; Write a byte using the SCC
+Floppy_GCRWriteByte:
             moveq   #-1,D0
 .L1:
             btst.b  #2,(A0)
             dbne    D0,.L1
-            beq.b   .L2
+            beq.b   .Fail                           ; Timeout?
             move.b  D1,(A1)
             rts
-.L2:
+.Fail:
             addq.l  #4,SP
             moveq   #0,D0
-.L3:
+Floppy_GCRFormatTrack_Exit:
             bset.b  #5,$E0FFFE
             move.b  #5,$B00001
             move.b  #$62,$B00001
