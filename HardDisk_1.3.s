@@ -162,13 +162,13 @@ DiagEntry:
             move.l  D1,(A0)+
             dbra    D0,.ClearMacScreen
             lea     (SCSI_Base).l,A0
-            move.b  ($10,A0),D0                     ; Host SCSI chip at $580010/$580040?
-            or.b    ($40,A0),D0
+            move.b  (sICR,A0),D0                    ; Host SCSI chip at $580010/$580040?
+            or.b    (sSER,A0),D0
             andi.b  #$80,D0
             bne.b   .ProbeDone
-            move.b  #$80,($10,A0)
-            move.b  ($10,A0),D0
-            and.b   ($40,A0),D0
+            move.b  #$80,(sICR,A0)
+            move.b  (sICR,A0),D0
+            and.b   (sSER,A0),D0
             andi.b  #$80,D0
             beq.b   .ProbeDone
 .HasSCSI:
@@ -190,7 +190,7 @@ PlusPatch4000CE:
             andi.b  #$F,D2
             or.b    D2,(vBufA,A5)
             move.b  #$7F,(vDIRA,A5)                 ; VIA setup as the ROM would
-            move.b  (A5),D6
+            move.b  (vBufB,A5),D6
             lsl.b   #4,D6
             move.b  #$7F,(vIER,A5)                  ; IER: all off
             clr.b   (vPCR,A5)
@@ -234,7 +234,7 @@ PlusPatch4000CE:
             bra.b   .Cycle
 .Full:
             btst    #IsMacSEROM,(OutboundCfg).l
-            beq.b   .PlusBeep                            ; SE: finish BootBeep, then SEPatch4029F8.SoundOff
+            beq.b   .PlusBeep                       ; SE: finish BootBeep, then SEPatch4029F8.SoundOff
             pea     SEPatch4029F8.SoundOff
             jmp     (SE_BeepLoop).l
 .PlusBeep:
@@ -245,7 +245,7 @@ PlusPatch4000CE:
             lea     .Hang,A6
             jmp     (Plus_CheckROM).l               ; ROM checksum
 .Hang:
-            bne.b   .Hang                            ; Hang if it failed
+            bne.b   .Hang                           ; Hang if it failed
             movea.l A3,A0                           ; Fill RAM with $FF
             moveq   #-1,D1
             sub.l   A3,D0
@@ -322,7 +322,7 @@ SEPatch400050:
             btst    #HostMac,(OutboundCfg).l
             bne.b   .CheckSCSI
             move.b  #$F7,(VBase+vDIRB).l            ; VIA port B: $F7
-            move.b  #$F7,(VBase).l
+            move.b  #$F7,(VBase+vBufB).l
 .CheckSCSI:
             btst    #SCSIPresent,(OutboundCfg).l
             beq.b   .WhichCPU
@@ -473,10 +473,14 @@ PlusPatch400972:
             lea     .PlusZone,A0
             rte
 .PlusZone:
-            dc.w    0,$9D40,$0003,$2740,$0020       ; Plus: start $9D40, limit $32740, 32 masters
+            dc.l    $9D40                           ; Start $9D40
+            dc.l    $32740                          ; Limit $32740
+            dc.w    32                              ; 32 masters
             ds.b    4
 .SEZone:
-            dc.w    0,$9F40,$0003,$2940,$0040       ; SE: start $9F40, limit $32940, 64
+            dc.l    $9F40                           ; Start $9F40
+            dc.l    $32940                          ; Limit $32940
+            dc.w    64                              ; 64 masters
             ds.b    4
 ; PlusPatch40087E
 ; Plus $40087E: UnitNtryCnt = 64, so units 48-50 (.Super's other slot, .RAMd,
@@ -669,8 +673,8 @@ PlusPatch4008A2:
             beq.b   .WaitFDCReady
             bset    #Cfg2Bit0,(OutboundCfg2).l      ; Floppy controller found (no driver in this image)
 .NoFDC:
-            bsr.w   InstallRAMdDrvr                      ; Install .RAMd
-            move.l  #$989680,D0
+            bsr.w   InstallRAMdDrvr                 ; Install .RAMd
+            move.l  #10000000,D0
 .WaitATANotBusy:
             cmpi.b  #$80,(ATAStatus).l              ; ATA status: wait for BSY to clear
             bne.b   .ATATries
@@ -1044,7 +1048,7 @@ LineAHook:
             bne.b   .PlusIcon
             cmpi.w  #$A86E,(A0)                     ; _InitGraf
             bne.b   .PlusAlert
-            bsr.w   InitKbd                      ; Plus: _InitGraf takes over keyboard and mouse
+            bsr.w   InitKbd                         ; Plus: _InitGraf takes over keyboard and mouse
             bra.w   .OtherTraps
 .PlusAlert:
             cmpa.l  #Plus_DSDrawBox,A0              ; Plus: alert box
@@ -1107,11 +1111,11 @@ LineAHook:
             btst    #HostMac,(OutboundCfg).l
             bne.b   .OtherTraps
             move.w  #$40,($5C,SP)
-            pea     .ScreenRect                            ; Destination rect: centered
+            pea     .ScreenRect                     ; Destination rect: centered
             move.l  (SP)+,($48,SP)
             bra.b   .OtherTraps
 .ScreenRect:
-            dc.w    $001D,$0040,$0173,$0240         ; 512x342 at (64,29)
+            dc.w    29,64,342+29,512+64             ; 512x342 at (64,29)
 .OtherTraps:
             btst    #HostMac,(OutboundCfg).l
             bne.b   .SizeRsrc
@@ -1267,8 +1271,8 @@ CursorPatchOffs:
 ; Their new values: moveq #80 for the row bytes, and the limits 608, 384, 400,
 ; 624, 640
 CursorPatchVals:
-            dc.w    $7050,$0260,$0260,$0180,$0190,$7A50,$0270,$0190
-            dc.w    $0280
+            dc.w    $7050,608,608,384,400,$7A50,624,400
+            dc.w    640
 ; MoveScreen
 ; Switch to the Outbound's 640x400 screen at $700000: copy the ROM's cursor code
 ; to the system heap, retarget the cursor jump vectors, patch its screen
@@ -1318,9 +1322,9 @@ MoveScreen:
             move.w  #$33,D0
             _SetToolBoxTrapAddress                  ; _ScrnBitMap
             move.l  #OutboundDisp,ScrnBase          ; Outbound screen
-            move.w  #$50,ScreenRow                  ; 80 bytes per row
-            move.w  #$280,($83A).w                  ; CrsrPin right
-            move.w  #$190,($838).w                  ; CrsrPin bottom
+            move.w  #80,ScreenRow                  ; 80 bytes per row
+            move.w  #640,($83A).w                  ; CrsrPin right
+            move.w  #400,($838).w                  ; CrsrPin bottom
             clr.b   CrsrBusy
             move.l  #OutboundSnd,SoundBase          ; Sound buffer
             movem.l (SP)+,D0-D7/A0-A6
@@ -1333,8 +1337,8 @@ OBScrnBitMap:
             move.l  ScrnBase,(A0)+                  ; baseAddr
             move.w  ScreenRow,(A0)+                 ; rowBytes
             clr.l   (A0)+                           ; bounds: top, left 0
-            move.w  #$190,(A0)+                     ; bottom 400
-            move.w  #$280,(A0)                      ; right 640
+            move.w  #400,(A0)+                     ; bottom 400
+            move.w  #640,(A0)                      ; right 640
             jmp     (A1)
 ; Clock and parameter RAM (the same code is in Floppy_1.3.s and HardDisk_1.3.s). The
 ; clock chip, which looks like a Motorola MC68HC68T1, is on VIA port B at
@@ -2445,7 +2449,7 @@ KbdVBLIntr:
             movea.l D0,A0
             jsr     (A0)
 .ContinueRom:
-            btst    #IsMacSEROM,(OutboundCfg).l                  ; Rest of the ROM's VBL handler: SE, then Plus
+            btst    #IsMacSEROM,(OutboundCfg).l     ; Rest of the ROM's VBL handler: SE, then Plus
             beq.b   .PlusRom
             jmp     (SE_VBLTasks).l
 .PlusRom:
@@ -2480,7 +2484,7 @@ KbdOneSecIntr:
             bsr.w   KbdIntr
             movem.l (SP)+,D0-D7/A0-A6
 .Reinstall:
-            pea     KbdIntr                      ; Shift register handler back in Lvl1DT+8
+            pea     KbdIntr                         ; Shift register handler back in Lvl1DT+8
             move.l  (SP)+,($19A).w
             btst    #IsMacSEROM,(OutboundCfg).l     ; ROM one-second handler: SE, then Plus
             beq.b   .PlusRom
@@ -2536,7 +2540,7 @@ DrawBootLogo:
 .DrawRun:
             move.b  (A0)+,D1                        ; Draw run
             add.b   D1,D3
-            beq.b   NextLogoPixel.Return                   ; 0 at a row start ends it
+            beq.b   NextLogoPixel.Return            ; 0 at a row start ends it
 .Toggle:
             bchg    D2,(A4)                         ; Toggle the pixel
             bsr.b   NextLogoPixel
@@ -2813,15 +2817,15 @@ InstallRAMdDrvr:
             movem.l (SP)+,D0-D7/A0-A6
             rts
 RAMdDriver:
-            dc.w    $4F00                       ; Driver '.RAMd' - drvrFlags
-            dc.w    0                           ; drvrDelay
-            dc.w    $0000                       ; drvrEMask
-            dc.w    0                           ; drvrMenu
-            dc.w    RAMdOpen-RAMdDriver         ; drvrOpen
-            dc.w    RAMdPrime-RAMdDriver        ; drvrPrime
-            dc.w    RAMdCtl-RAMdDriver          ; drvrCtl
-            dc.w    RAMdStatus-RAMdDriver       ; drvrStatus
-            dc.w    RAMdClose-RAMdDriver        ; drvrClose
+            dc.w    $4F00                           ; Driver '.RAMd' - drvrFlags
+            dc.w    0                               ; drvrDelay
+            dc.w    $0000                           ; drvrEMask
+            dc.w    0                               ; drvrMenu
+            dc.w    RAMdOpen-RAMdDriver             ; drvrOpen
+            dc.w    RAMdPrime-RAMdDriver            ; drvrPrime
+            dc.w    RAMdCtl-RAMdDriver              ; drvrCtl
+            dc.w    RAMdStatus-RAMdDriver           ; drvrStatus
+            dc.w    RAMdClose-RAMdDriver            ; drvrClose
 .Name:
             dc.b    5,'.RAMd'
 ; RAMdOpen
@@ -2945,7 +2949,7 @@ RAMdXfer:
             lsr.b   #4,D2
             move.b  #3,D3
             and.w   D2,D3
-            move.b  .UnitsPerMode(PC,D3.w),D4                 ; Units in the low window
+            move.b  .UnitsPerMode(PC,D3.w),D4       ; Units in the low window
             bra.b   .CheckHigh
 .UnitsPerMode:
             dc.w    $0001,$0102                     ; Units for lane modes 0-3
@@ -2979,7 +2983,7 @@ RAMdXfer:
             clr.w   D3
             andi.b  #3,D2
             beq.b   .NextWindow
-            move.b  .UnitsPerMode(PC,D2.w),D3                 ; Skip the checksum block(s) at the start
+            move.b  .UnitsPerMode(PC,D2.w),D3       ; Skip the checksum block(s) at the start
             add.w   D3,(-$A,A6)
             bclr    #2,(-2,A6)
             move.w  #$200,D3                        ; Window size: 512 blocks, 1024 for a word lane
@@ -3049,7 +3053,7 @@ ByteLaneXfer:
             beq.b   .Read
             bset    #RAMDiskBit,(OutboundVIA+vDIRB).l ; Write enable: VIA port B bit 5 low
             bclr    #RAMDiskBit,(OutboundVIA).l
-            bsr.w   PutChecksums                      ; Checksums first
+            bsr.w   PutChecksums                    ; Checksums first
             btst    #0,D2                           ; Odd buffer: first byte alone, then shift the lane by one
             beq.b   .WriteGroup
             move.b  (A0)+,(A1)
@@ -3103,7 +3107,7 @@ ByteLaneXfer:
             move.b  (4,A1),(A0)+
 .ReadDone:
             exg     D2,A0
-            bsr.w   CheckChecksums                      ; Check the checksums
+            bsr.w   CheckChecksums                  ; Check the checksums
             bne.b   .Mismatch
             exg     D2,A0
             moveq   #0,D7
@@ -3499,7 +3503,7 @@ SizeRAMDisk:
 .Restore:
             bsr.w   SelectBank
             move.b  (0,A4,D0.w),D2
-            move.b  .LaneModes(PC,D2.w),D2                 ; Lane mask to modes (bits 4-5 low, 6-7 high, 0-3 units)
+            move.b  .LaneModes(PC,D2.w),D2          ; Lane mask to modes (bits 4-5 low, 6-7 high, 0-3 units)
             move.b  D2,(0,A4,D0.w)
             move.w  (SP)+,(A1)                      ; Restore the saved words
             move.w  (SP)+,(A0)
@@ -3635,7 +3639,7 @@ ATASetCHS:
             movem.l D6-D7/A3,-(SP)
             move.l  (8,A6),D7
             movea.l ($C,A6),A3
-            jsr     ATAWaitReady                      ; Wait for not BSY
+            jsr     ATAWaitReady                    ; Wait for not BSY
             move.w  D0,D6
             bge.b   .Ready
             move.w  D6,D0
@@ -3992,15 +3996,15 @@ PTekStatus:
             jsr     PTekDoStatus
             bra.b   PTekPrime.Finish
 PTekDriver:
-            dc.w    $4F00                       ; Driver '.PTek' - drvrFlags
-            dc.w    0                           ; drvrDelay
-            dc.w    $0000                       ; drvrEMask
-            dc.w    0                           ; drvrMenu
-            dc.w    PTekOpen-PTekDriver         ; drvrOpen
-            dc.w    PTekPrime-PTekDriver        ; drvrPrime
-            dc.w    PTekCtl-PTekDriver          ; drvrCtl
-            dc.w    PTekStatus-PTekDriver       ; drvrStatus
-            dc.w    PTekClose-PTekDriver        ; drvrClose
+            dc.w    $4F00                           ; Driver '.PTek' - drvrFlags
+            dc.w    0                               ; drvrDelay
+            dc.w    $0000                           ; drvrEMask
+            dc.w    0                               ; drvrMenu
+            dc.w    PTekOpen-PTekDriver             ; drvrOpen
+            dc.w    PTekPrime-PTekDriver            ; drvrPrime
+            dc.w    PTekCtl-PTekDriver              ; drvrCtl
+            dc.w    PTekStatus-PTekDriver           ; drvrStatus
+            dc.w    PTekClose-PTekDriver            ; drvrClose
 .Name:
             dc.b    5,'.PTek'
 ; PTekMediaIcon
@@ -4194,11 +4198,11 @@ ATAReadSectors:
             subq.b  #1,D2
             move.l  A3,D0
             andi.w  #1,D0
-            bne.b   .OddSector                             ; Odd buffer: a byte at a time
+            bne.b   .OddSector                      ; Odd buffer: a byte at a time
 .Sector:
             jsr     ATAWaitDRQ
             tst.w   D0
-            bmi.b   .Done                             ; ERR status is positive: never taken
+            bmi.b   .Done                           ; ERR status is positive: never taken
             move.w  #$1F,D1
             lea     (ATAData).l,A0                  ; Data register
 .Words:
@@ -4262,11 +4266,11 @@ ATAWriteSectors:
             move.b  #$30,(ATAStatus).l              ; WRITE SECTORS
             move.l  A3,D0
             andi.w  #1,D0
-            bne.b   .OddSector                             ; Odd buffer: a byte at a time
+            bne.b   .OddSector                      ; Odd buffer: a byte at a time
 .Sector:
             jsr     ATAWaitDRQ
             tst.w   D0
-            bmi.b   .Done                             ; ERR status is positive: never taken
+            bmi.b   .Done                           ; ERR status is positive: never taken
             move.w  #$1F,D1
             lea     (ATAData).l,A0
 .Words:

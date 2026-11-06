@@ -133,7 +133,7 @@ DiagEntry:
             move.l  A6,(PatchTblPtr).l
             move.l  #PtchROMBase,(PtchTblBase).l
             move.w  (BaseOfROM).l,D0
-            bsr.w   SizeRAM                      ; Size RAM
+            bsr.w   SizeRAM                         ; Size RAM
             btst    #ExpansionConn,(OutboundVIA).l  ; Anything on the expansion connector?
             beq.w   .ToROM
             movea.l #ExpansionROM,A0
@@ -162,13 +162,13 @@ DiagEntry:
             move.l  D1,(A0)+
             dbra    D0,.ClearMacScreen
             lea     (SCSI_Base).l,A0
-            move.b  ($10,A0),D0                     ; Host SCSI chip at $580010/$580040?
-            or.b    ($40,A0),D0
+            move.b  (sICR,A0),D0                    ; Host SCSI chip at $580010/$580040?
+            or.b    (sSER,A0),D0
             andi.b  #$80,D0
             bne.b   .ProbeDone
-            move.b  #$80,($10,A0)
-            move.b  ($10,A0),D0
-            and.b   ($40,A0),D0
+            move.b  #$80,(sICR,A0)
+            move.b  (sICR,A0),D0
+            and.b   (sSER,A0),D0
             andi.b  #$80,D0
             beq.b   .ProbeDone
 .HasSCSI:
@@ -176,7 +176,7 @@ DiagEntry:
 .ProbeDone:
             clr.b   (SCSI_ICRwrite).l
 .ToROM:
-            movea.l (OutboundGlobals).l,SP                ; Back to the ROM's stack
+            movea.l (OutboundGlobals).l,SP          ; Back to the ROM's stack
             move.l  #TraceHandler,TraceVector       ; Trace patches on
             bset    #CfgBit5,(OutboundCfg).l
             move    #$A700,SR                       ; Trace on
@@ -190,7 +190,7 @@ PlusPatch4000CE:
             andi.b  #$F,D2
             or.b    D2,(vBufA,A5)
             move.b  #$7F,(vDIRA,A5)                 ; VIA setup as the ROM would
-            move.b  (A5),D6
+            move.b  (vBufB,A5),D6
             lsl.b   #4,D6
             move.b  #$7F,(vIER,A5)                  ; IER: all off
             clr.b   (vPCR,A5)
@@ -335,7 +335,7 @@ SEPatch400050:
 ; Outbound sound buffer; .SoundOff runs when it's done
 SEPatch4029F8:
             movea.l #OutboundSnd,A0                 ; Sound buffer
-            move.l  #PlusPatch4000CE.BeepWave,(2,SP)      ; Into the shared beep
+            move.l  #PlusPatch4000CE.BeepWave,(2,SP) ; Into the shared beep
             andi.w  #$7FFF,(SP)                     ; Tracing off
             rte
 .SoundOff:
@@ -448,7 +448,7 @@ PlusPatch4005BC:
 ; SE $4001A0 (SetUpSysAppZone): _InitZone parameters that start the system heap
 ; after the EEPROM's RAM copy and globals
 SEPatch4001A0:
-            lea     PlusPatch400972.SEZone,A0           ; SE heap parameters
+            lea     PlusPatch400972.SEZone,A0       ; SE heap parameters
             rte
 ; SEPatch40331E
 ; SE $40331E (KBDMngr): skip the ADB hardware setup and fill in the ADB globals
@@ -473,10 +473,14 @@ PlusPatch400972:
             lea     .PlusZone,A0
             rte
 .PlusZone:
-            dc.w    0,$9D40,$0003,$2740,$0020       ; Plus: start $9D40, limit $32740, 32 masters
+            dc.l    $9D40                           ; Start $9D40
+            dc.l    $32740                          ; Limit $32740
+            dc.w    32                              ; 32 masters
             ds.b    4
 .SEZone:
-            dc.w    0,$9F40,$0003,$2940,$0040       ; SE: start $9F40, limit $32940, 64
+            dc.l    $9F40                           ; Start $9F40
+            dc.l    $32940                          ; Limit $32940
+            dc.w    64                              ; 64 masters
             ds.b    4
 ; PlusPatch40087E
 ; Plus $40087E: UnitNtryCnt = 64, so units 48-50 (.Super's other slot, .RAMd,
@@ -632,8 +636,8 @@ PlusPatch4008A2:
             bset    #Cfg2Bit0,(OutboundCfg2).l      ; Floppy controller found
             bsr.w   InstallSuperDrvr
 .NoFDC:
-            bsr.w   InstallRAMdDrvr                      ; Install .RAMd
-            move.l  #$989680,D0
+            bsr.w   InstallRAMdDrvr                 ; Install .RAMd
+            move.l  #10000000,D0
 .WaitATANotBusy:
             cmpi.b  #$80,(ATAStatus).l
             bne.b   .ATATries
@@ -689,15 +693,15 @@ SEPatch4001DA:
             movem.l D0-D7/A0-A6,-(SP)
             bsr.b   HookLineA
             bsr.w   MoveScreen                      ; Outbound screen
-            bsr.w   InitKbd                      ; Take over keyboard and mouse
+            bsr.w   InitKbd                         ; Take over keyboard and mouse
             move.l  #SE_GenTrace,TraceVector        ; ROM trace handler
             move.w  HWCfgFlags,D0
             bclr    #$A,D0                          ; No ADB
             move.w  D0,HWCfgFlags
-            lea     CountADBsStub,A0                   ; CountADBs: 0 devices
+            lea     CountADBsStub,A0                ; CountADBs: 0 devices
             move.w  #$77,D0
             _SetOSTrapAddress
-            lea     GetIndADBStub,A0                   ; GetIndADB: -1
+            lea     GetIndADBStub,A0                ; GetIndADB: -1
             move.w  #$78,D0
             _SetOSTrapAddress
             movem.l (SP)+,D0-D7/A0-A6
@@ -743,8 +747,8 @@ PlusDrawDiskIcon:
 .Draw:
             lea     .Overlay,A6
             btst    #HostMac,(OutboundCfg).l
-            beq.w   OBPutIcon                   ; Draw it here
-            jmp     (Plus_PutIcon).l                     ; Bit 3: the ROM's PutIcon
+            beq.w   OBPutIcon                       ; Draw it here
+            jmp     (Plus_PutIcon).l                ; Bit 3: the ROM's PutIcon
 .Overlay:
             tst.w   D7                              ; Overlay?
             beq.b   .ShowCursor
@@ -814,7 +818,7 @@ PlusHappyMacTrap:
             movea.l #Plus_HappyMacIcon,A0           ; ROM's happy Mac
             btst    #HostMac,(OutboundCfg).l
             bne.b   .Resume
-            lea     PlusDrawHappyMac,A0                   ; Ours
+            lea     PlusDrawHappyMac,A0             ; Ours
 .Resume:
             move.l  A0,($3E,SP)
             movem.l (SP)+,D0-D7/A0-A6
@@ -1006,7 +1010,7 @@ LineAHook:
             bne.b   .PlusIcon
             cmpi.w  #$A86E,(A0)                     ; _InitGraf
             bne.b   .PlusAlert
-            bsr.w   InitKbd                      ; Plus: _InitGraf takes over keyboard and mouse
+            bsr.w   InitKbd                         ; Plus: _InitGraf takes over keyboard and mouse
             bra.w   .OtherTraps
 .PlusAlert:
             cmpa.l  #Plus_DSDrawBox,A0              ; Plus: alert box
@@ -1069,11 +1073,11 @@ LineAHook:
             btst    #HostMac,(OutboundCfg).l
             bne.b   .OtherTraps
             move.w  #$40,($5C,SP)
-            pea     .ScreenRect                            ; Destination rect: centered
+            pea     .ScreenRect                     ; Destination rect: centered
             move.l  (SP)+,($48,SP)
             bra.b   .OtherTraps
 .ScreenRect:
-            dc.w    $001D,$0040,$0173,$0240         ; 512x342 at (64,29)
+            dc.w    29,64,342+29,512+64            ; 512x342 at (64,29)
 .OtherTraps:
             btst    #HostMac,(OutboundCfg).l
             bne.b   .SizeRsrc
@@ -1229,8 +1233,8 @@ CursorPatchOffs:
 ; Their new values: moveq #80 for the row bytes, and the limits 608, 384, 400,
 ; 624, 640
 CursorPatchVals:
-            dc.w    $7050,$0260,$0260,$0180,$0190,$7A50,$0270,$0190
-            dc.w    $0280
+            dc.w    $7050,608,608,384,400,$7A50,624,400
+            dc.w    640
 ; MoveScreen
 ; Switch to the Outbound's 640x400 screen at $700000: copy the ROM's cursor code
 ; to the system heap, retarget the cursor jump vectors, patch its screen
@@ -1280,9 +1284,9 @@ MoveScreen:
             move.w  #$33,D0
             _SetToolBoxTrapAddress                  ; _ScrnBitMap
             move.l  #OutboundDisp,ScrnBase          ; Outbound screen
-            move.w  #$50,ScreenRow                  ; 80 bytes per row
-            move.w  #$280,($83A).w                  ; CrsrPin right
-            move.w  #$190,($838).w                  ; CrsrPin bottom
+            move.w  #80,ScreenRow                  ; 80 bytes per row
+            move.w  #640,($83A).w                  ; CrsrPin right
+            move.w  #400,($838).w                   ; CrsrPin bottom
             clr.b   CrsrBusy
             move.l  #OutboundSnd,SoundBase          ; Sound buffer
             movem.l (SP)+,D0-D7/A0-A6
@@ -1295,8 +1299,8 @@ OBScrnBitMap:
             move.l  ScrnBase,(A0)+                  ; baseAddr
             move.w  ScreenRow,(A0)+                 ; rowBytes
             clr.l   (A0)+                           ; bounds: top, left 0
-            move.w  #$190,(A0)+                     ; bottom 400
-            move.w  #$280,(A0)                      ; right 640
+            move.w  #400,(A0)+                      ; bottom 400
+            move.w  #640,(A0)                       ; right 640
             jmp     (A1)
 ; Clock and parameter RAM (the same code is in Floppy_1.3.s and HardDisk_1.3.s). The
 ; clock chip, which looks like a Motorola MC68HC68T1, is on VIA port B at
@@ -4197,7 +4201,7 @@ FormatTrack:
             tst.w   D0
             addq.l  #8,SP
             bne.b   .SendIDs
-            moveq   #-$43,D0
+            moveq   #noAdrMkErr,D0
             bra.w   .Done
 .SendIDs:
             moveq   #0,D0
@@ -4209,7 +4213,7 @@ FormatTrack:
             tst.w   D0
             addq.l  #8,SP
             bne.b   .GetResult
-            moveq   #-$45,D0
+            moveq   #badCksmErr,D0
             bra.w   .Done
 .GetResult:
             moveq   #7,D0
@@ -4236,10 +4240,10 @@ FormatTrack:
             cmp.b   (-$4A,A6),D0
             beq.w   .NextSide
 .BadResult:
-            moveq   #-$4A,D0
+            moveq   #wrUnderrun,D0
             bra.w   .Done
 .NoResult:
-            moveq   #-$46,D0
+            moveq   #badBtSlpErr,D0
             bra.w   .Done
 .GCR:
             moveq   #0,D0                           ; GCR: set the zone's sectors per track and speed
@@ -4260,7 +4264,7 @@ FormatTrack:
             jsr     AdjustSpeed
             tst.w   D0
             bne.b   .SelectHead
-            moveq   #-$4F,D0
+            moveq   #spdAdjErr,D0
             bra.b   .Done
 .SelectHead:
             move.b  #4,(-$56,A6)                    ; SENSE DRIVE STATUS selects the head
@@ -4274,7 +4278,7 @@ FormatTrack:
             tst.w   D0
             addq.l  #8,SP
             bne.b   .WriteTrack
-            moveq   #-$47,D0
+            moveq   #noDtaMkErr,D0
             bra.b   .Done
 .WriteTrack:
             moveq   #0,D0
@@ -4284,7 +4288,7 @@ FormatTrack:
             tst.w   D0
             addq.l  #4,SP
             bne.b   .ReadST3
-            moveq   #-$4A,D0
+            moveq   #wrUnderrun,D0
             bra.b   .Done
 .ReadST3:
             moveq   #1,D0
@@ -4294,7 +4298,7 @@ FormatTrack:
             tst.w   D0
             addq.l  #8,SP
             bne.b   .Settle
-            moveq   #-$49,D0
+            moveq   #badDBtSlp,D0
             bra.b   .Done
 .Settle:
             move.w  #5000,D7                    ; Settle
@@ -4581,7 +4585,7 @@ InstallSuperDrvr:
             moveq   #-5,D0                          ; refNum -5, the .Sony slot
             btst    #HostMac,(OutboundCfg).l
             beq.b   .Install
-            moveq   #-$31,D0                        ; refNum -49 when OutboundCfg bit 3 is set
+            moveq   #-49,D0                        ; refNum -49 when OutboundCfg bit 3 is set
 .Install:
             _DrvrInstall
             lea     SuperDriver,A1
@@ -5051,7 +5055,7 @@ XferCylinder:
             addq.l  #4,SP
             tst.w   D0
             bne.b   .Seek
-            moveq   #-$41,D0
+            moveq   #offLinErr,D0
             bra.w   .Done
 .Seek:
             moveq   #0,D0
@@ -5061,7 +5065,7 @@ XferCylinder:
             addq.l  #4,SP
             tst.w   D0
             bne.b   .Start
-            moveq   #-$50,D0
+            moveq   #seekErr,D0
             bra.w   .Done
 .Start:
             moveq   #5,D4                           ; Retries
@@ -5094,7 +5098,7 @@ XferCylinder:
             addq.l  #8,SP
             tst.w   D0
             bne.b   .Data
-            moveq   #-$47,D0
+            moveq   #noDtaMkErr,D0
             bra.w   .Done
 .Data:
             move.l  (FlpTrkSize,A2),-(SP)
@@ -5114,12 +5118,12 @@ XferCylinder:
             addq.l  #8,SP
             tst.w   D0
             bne.b   .CheckST1
-            moveq   #-$49,D0
+            moveq   #badDBtSlp,D0
             bra.w   .Done
 .CheckST1:
             btst    #0,(1,A5)                       ; ST1 missing address mark
             beq.b   .CheckResult
-            moveq   #-$43,D0
+            moveq   #noAdrMkErr,D0
             bra.w   .Done
 .CheckResult:
             moveq   #$44,D0                         ; Expect ST0 $44, ST1 $80, ST2 0, C, last H, last R, N 2
@@ -5160,7 +5164,7 @@ XferCylinder:
             addq.l  #8,SP
             tst.w   D0
             bne.b   .GCRSectors
-            moveq   #-$47,D0
+            moveq   #noDtaMkErr,D0
             bra.b   .Done
 .GCRSectors:
             move.l  A4,-(SP)
@@ -5175,7 +5179,7 @@ XferCylinder:
             addq.l  #8,SP
             tst.w   D0
             bne.b   .HeadDone
-            moveq   #-$49,D0
+            moveq   #badDBtSlp,D0
             bra.b   .Done
 .HeadDone:
             tst.w   D6
