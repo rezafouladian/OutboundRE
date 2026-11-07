@@ -149,20 +149,20 @@ DiagEntry:
             beq.b   .ToROM
             bclr    #ExtFloppy,(OutboundCfg).l
             ori.b   #1<<HostMac|1<<CfgBit1,(OutboundCfg).l ; Otherwise docked to a Plus or SE
-            move.l  #$493E0,D0
+            move.l  #300000,D0                      ; Delay count
 .Settle:
             subq.l  #1,D0
             bne.b   .Settle
             move.b  #1,(ExpansionCtl).l
             clr.w   (SCSI_Base).l
-            moveq   #-1,D1
-            move.w  #$155F,D0                       ; Host Mac's screen: black
+            moveq   #-1,D1                          ; Fill the screen with black
+            move.w  #(512*342/8)/4-1,D0             ; Host Mac screen size
             movea.l #ScreenLow,A0
 .ClearMacScreen:
             move.l  D1,(A0)+
             dbra    D0,.ClearMacScreen
             lea     (SCSI_Base).l,A0
-            move.b  (sICR,A0),D0                    ; Host SCSI chip at $580010/$580040?
+            move.b  (sICR,A0),D0
             or.b    (sSER,A0),D0
             andi.b  #$80,D0
             bne.b   .ProbeDone
@@ -176,7 +176,7 @@ DiagEntry:
 .ProbeDone:
             clr.b   (SCSI_ICRwrite).l
 .ToROM:
-            movea.l (OutboundGlobals).l,SP                ; Back to the ROM's stack
+            movea.l (OutboundGlobals).l,SP          ; Back to the ROM's stack
             move.l  #TraceHandler,TraceVector       ; Trace patches on
             bset    #CfgBit5,(OutboundCfg).l
             move    #$A700,SR                       ; Trace on
@@ -2580,11 +2580,11 @@ BootLogoRLE:
 ; Copy a 32x32 icon from A1 to A0 and build its mask
 CopyIconMask:
             movem.l D0-D3,-(SP)
-            move.w  #$1F,D3
+            move.w  #32-1,D3
 .NextRow:
             move.l  (A1)+,D0
             moveq   #-1,D1
-            move.w  #$1F,D2
+            move.w  #32-1,D2
 .FromLeft:
             btst    D2,D0
             bne.b   .Right

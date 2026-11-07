@@ -149,20 +149,20 @@ DiagEntry:
             beq.b   .ToROM
             bclr    #ExtFloppy,(OutboundCfg).l
             ori.b   #1<<HostMac|1<<CfgBit1,(OutboundCfg).l ; Otherwise docked to a Plus or SE
-            move.l  #$493E0,D0
+            move.l  #300000,D0                      ; Delay count
 .Settle:
             subq.l  #1,D0
             bne.b   .Settle
             move.b  #1,(ExpansionCtl).l
             clr.w   (SCSI_Base).l
-            moveq   #-1,D1
-            move.w  #$155F,D0                       ; Host Mac's screen: black
+            moveq   #-1,D1                          ; Fill the screen with black
+            move.w  #(512*342/8)/4-1,D0             ; Host Mac screen size
             movea.l #ScreenLow,A0
 .ClearMacScreen:
             move.l  D1,(A0)+
             dbra    D0,.ClearMacScreen
             lea     (SCSI_Base).l,A0
-            move.b  (sICR,A0),D0                    ; Host SCSI chip at $580010/$580040?
+            move.b  (sICR,A0),D0
             or.b    (sSER,A0),D0
             andi.b  #$80,D0
             bne.b   .ProbeDone
@@ -1284,8 +1284,8 @@ MoveScreen:
             move.w  #$33,D0
             _SetToolBoxTrapAddress                  ; _ScrnBitMap
             move.l  #OutboundDisp,ScrnBase          ; Outbound screen
-            move.w  #80,ScreenRow                  ; 80 bytes per row
-            move.w  #640,($83A).w                  ; CrsrPin right
+            move.w  #80,ScreenRow                   ; 80 bytes per row
+            move.w  #640,($83A).w                   ; CrsrPin right
             move.w  #400,($838).w                   ; CrsrPin bottom
             clr.b   CrsrBusy
             move.l  #OutboundSnd,SoundBase          ; Sound buffer
@@ -1692,7 +1692,7 @@ KbdIntr:
             btst    #1,D0                           ; Waiting for a key packet's second byte?
             bne.w   KeyPacket
             bclr    #2,($68,A1)                     ; Left set when a key packet's second byte came late: drop this byte
-            beq.b   KbdFirstByte                      ; Otherwise it starts a key packet
+            beq.b   KbdFirstByte                    ; Otherwise it starts a key packet
             rts
 ; KbdFirstByte
 ; First byte of a key packet: key number and up/down, or status bits
@@ -1874,7 +1874,7 @@ KeyPacket:
             beq.b   .Translate
             bset    #7,D1
 .Translate:
-            bsr.b   KeyTransGlue                      ; Two character codes on the stack
+            bsr.b   KeyTransGlue                    ; Two character codes on the stack
             movea.l (OutboundGlobals).l,A1
             moveq   #0,D0
             move.w  (SP)+,D0                        ; First character
@@ -2201,7 +2201,7 @@ PostModKey:
             movem.l D0-D7,-(SP)
             move.b  D0,D6
             move.b  D1,D7
-            move.b  ModifierKeys(PC,D1.w),D0      ; Key code
+            move.b  ModifierKeys(PC,D1.w),D0        ; Key code
 .WithCode:
             btst    D1,($6A,A1)                     ; Bit set: down
             beq.b   .Update
@@ -2446,7 +2446,7 @@ KbdOneSecIntr:
             bsr.w   KbdIntr
             movem.l (SP)+,D0-D7/A0-A6
 .Reinstall:
-            pea     KbdIntr                      ; Shift register handler back in Lvl1DT+8
+            pea     KbdIntr                         ; Shift register handler back in Lvl1DT+8
             move.l  (SP)+,($19A).w
             btst    #IsMacSEROM,(OutboundCfg).l     ; ROM one-second handler: SE, then Plus
             beq.b   .PlusRom
@@ -2779,16 +2779,16 @@ InstallRAMdDrvr:
             movem.l (SP)+,D0-D7/A0-A6
             rts
 RAMdDriver:
-            dc.w    $4F00                       ; Driver '.RAMd' - drvrFlags
-            dc.w    0                           ; drvrDelay
-            dc.w    $0000                       ; drvrEMask
-            dc.w    0                           ; drvrMenu
-            dc.w    RAMdOpen-RAMdDriver         ; drvrOpen
-            dc.w    RAMdPrime-RAMdDriver        ; drvrPrime
-            dc.w    RAMdCtl-RAMdDriver          ; drvrCtl
-            dc.w    RAMdStatus-RAMdDriver       ; drvrStatus
-            dc.w    RAMdClose-RAMdDriver        ; drvrClose
-.Name:
+            dc.w    $4F00                           ; Driver '.RAMd' - drvrFlags
+            dc.w    0                               ; drvrDelay
+            dc.w    $0000                           ; drvrEMask
+            dc.w    0                               ; drvrMenu
+            dc.w    RAMdOpen-RAMdDriver             ; drvrOpen
+            dc.w    RAMdPrime-RAMdDriver            ; drvrPrime
+            dc.w    RAMdCtl-RAMdDriver              ; drvrCtl
+            dc.w    RAMdStatus-RAMdDriver           ; drvrStatus
+            dc.w    RAMdClose-RAMdDriver            ; drvrClose
+.Name:      
             dc.b    5,'.RAMd'
 ; RAMdOpen
 ; Open: size the silicon disk; add a drive of 511 blocks per unit, or openErr if
@@ -2911,7 +2911,7 @@ RAMdXfer:
             lsr.b   #4,D2
             move.b  #3,D3
             and.w   D2,D3
-            move.b  .UnitsPerMode(PC,D3.w),D4                 ; Units in the low window
+            move.b  .UnitsPerMode(PC,D3.w),D4       ; Units in the low window
             bra.b   .CheckHigh
 .UnitsPerMode:
             dc.w    $0001,$0102                     ; Units for lane modes 0-3
@@ -3015,7 +3015,7 @@ ByteLaneXfer:
             beq.b   .Read
             bset    #RAMDiskBit,(OutboundVIA+vDIRB).l ; Write enable: VIA port B bit 5 low
             bclr    #RAMDiskBit,(OutboundVIA).l
-            bsr.w   PutChecksums                      ; Checksums first
+            bsr.w   PutChecksums                    ; Checksums first
             btst    #0,D2                           ; Odd buffer: first byte alone, then shift the lane by one
             beq.b   .WriteGroup
             move.b  (A0)+,(A1)
@@ -3069,7 +3069,7 @@ ByteLaneXfer:
             move.b  (4,A1),(A0)+
 .ReadDone:
             exg     D2,A0
-            bsr.w   CheckChecksums                      ; Check the checksums
+            bsr.w   CheckChecksums                  ; Check the checksums
             bne.b   .Mismatch
             exg     D2,A0
             moveq   #0,D7
