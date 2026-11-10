@@ -133,7 +133,7 @@ DiagEntry:
             move.l  A6,(PatchTblPtr).l
             move.l  #PtchROMBase,(PtchTblBase).l
             move.w  (BaseOfROM).l,D0
-            bsr.w   SizeRAM                      ; Size RAM
+            bsr.w   SizeRAM                         ; Size RAM
             btst    #ExpansionConn,(OutboundVIA).l  ; Anything on the expansion connector?
             beq.w   .ToROM
             movea.l #ExpansionROM,A0
@@ -195,7 +195,7 @@ PlusPatch4000CE:
             move.b  #$7F,(vIER,A5)                  ; IER: all off
             clr.b   (vPCR,A5)
             moveq   #$28,D3
-            lea     .AfterBeep,A6                         ; Return from the ROM beep
+            lea     .AfterBeep,A6                   ; Return from the ROM beep
             lea     (VBase).l,A5                    ; Mac VIA
             lea     (OutboundSnd).l,A0              ; Sound buffer
 .BeepWave:
@@ -335,7 +335,7 @@ SEPatch400050:
 ; Outbound sound buffer; .SoundOff runs when it's done
 SEPatch4029F8:
             movea.l #OutboundSnd,A0                 ; Sound buffer
-            move.l  #PlusPatch4000CE.BeepWave,(2,SP)      ; Into the shared beep
+            move.l  #PlusPatch4000CE.BeepWave,(2,SP) ; Into the shared beep
             andi.w  #$7FFF,(SP)                     ; Tracing off
             rte
 .SoundOff:
@@ -408,7 +408,7 @@ PlusPatch4003A8:
             movea.l (PtchTblBase).l,A0
             adda.w  #TraceHandler-PtchROMBase,A0    ; TraceHandler in the copy
             move.l  A0,TraceVector
-            move.l  #FlpCacheBuf+$4800,D0
+            move.l  #FlpCacheBuf+$4800,D0           ; Clear the globals ($140) and the cylinder cache ($4800)
 .Clear:
             clr.b   (A1)+
             subq.l  #1,D0
@@ -448,7 +448,7 @@ PlusPatch4005BC:
 ; SE $4001A0 (SetUpSysAppZone): _InitZone parameters that start the system heap
 ; after the EEPROM's RAM copy and globals
 SEPatch4001A0:
-            lea     PlusPatch400972.SEZone,A0           ; SE heap parameters
+            lea     PlusPatch400972.SEZone,A0       ; SE heap parameters
             rte
 ; SEPatch40331E
 ; SE $40331E (KBDMngr): skip the ADB hardware setup and fill in the ADB globals
@@ -671,7 +671,7 @@ PlusPatch4008A2:
             beq.b   .NoFDC
             btst    D0,(A0)
             beq.b   .WaitFDCReady
-            bset    #Cfg2Bit0,(OutboundCfg2).l      ; Floppy controller found (no driver in this image)
+            bset    #Cfg2Bit0,(OutboundCfg2).l      ; Floppy controller found
 .NoFDC:
             bsr.w   InstallRAMdDrvr                 ; Install .RAMd
             move.l  #10000000,D0
@@ -731,15 +731,15 @@ SEPatch4001DA:
             movem.l D0-D7/A0-A6,-(SP)
             bsr.b   HookLineA
             bsr.w   MoveScreen                      ; Outbound screen
-            bsr.w   InitKbd                      ; Take over keyboard and mouse
+            bsr.w   InitKbd                         ; Take over keyboard and mouse
             move.l  #SE_GenTrace,TraceVector        ; ROM trace handler
             move.w  HWCfgFlags,D0
             bclr    #$A,D0                          ; No ADB
             move.w  D0,HWCfgFlags
-            lea     CountADBsStub,A0                   ; CountADBs: 0 devices
+            lea     CountADBsStub,A0                ; CountADBs: 0 devices
             move.w  #$77,D0
             _SetOSTrapAddress
-            lea     GetIndADBStub,A0                   ; GetIndADB: -1
+            lea     GetIndADBStub,A0                ; GetIndADB: -1
             move.w  #$78,D0
             _SetOSTrapAddress
             movem.l (SP)+,D0-D7/A0-A6
@@ -785,8 +785,8 @@ PlusDrawDiskIcon:
 .Draw:
             lea     .Overlay,A6
             btst    #HostMac,(OutboundCfg).l
-            beq.w   OBPutIcon                   ; Draw it here
-            jmp     (Plus_PutIcon).l                     ; Bit 3: the ROM's PutIcon
+            beq.w   OBPutIcon                       ; Draw it here
+            jmp     (Plus_PutIcon).l                ; Bit 3: the ROM's PutIcon
 .Overlay:
             tst.w   D7                              ; Overlay?
             beq.b   .ShowCursor
@@ -856,7 +856,7 @@ PlusHappyMacTrap:
             movea.l #Plus_HappyMacIcon,A0           ; ROM's happy Mac
             btst    #HostMac,(OutboundCfg).l
             bne.b   .Resume
-            lea     PlusDrawHappyMac,A0                   ; Ours
+            lea     PlusDrawHappyMac,A0             ; Ours
 .Resume:
             move.l  A0,($3E,SP)
             movem.l (SP)+,D0-D7/A0-A6
@@ -1322,9 +1322,9 @@ MoveScreen:
             move.w  #$33,D0
             _SetToolBoxTrapAddress                  ; _ScrnBitMap
             move.l  #OutboundDisp,ScrnBase          ; Outbound screen
-            move.w  #80,ScreenRow                  ; 80 bytes per row
-            move.w  #640,($83A).w                  ; CrsrPin right
-            move.w  #400,($838).w                  ; CrsrPin bottom
+            move.w  #80,ScreenRow                   ; 80 bytes per row
+            move.w  #640,($83A).w                   ; CrsrPin right
+            move.w  #400,($838).w                   ; CrsrPin bottom
             clr.b   CrsrBusy
             move.l  #OutboundSnd,SoundBase          ; Sound buffer
             movem.l (SP)+,D0-D7/A0-A6
@@ -1337,16 +1337,9 @@ OBScrnBitMap:
             move.l  ScrnBase,(A0)+                  ; baseAddr
             move.w  ScreenRow,(A0)+                 ; rowBytes
             clr.l   (A0)+                           ; bounds: top, left 0
-            move.w  #400,(A0)+                     ; bottom 400
-            move.w  #640,(A0)                      ; right 640
+            move.w  #400,(A0)+                      ; bottom 400
+            move.w  #640,(A0)                       ; right 640
             jmp     (A1)
-; Clock and parameter RAM (the same code is in Floppy_1.3.s and HardDisk_1.3.s). The
-; clock chip, which looks like a Motorola MC68HC68T1, is on VIA port B at
-; $E7E1FE: bit 0 data, bit 1 clock, bit 2 select (low while talking), MSB first.
-; A command byte is the register address, plus $80 to write. Registers: $00-$1F
-; RAM ($00-$13 the 20 PRAM bytes, $14-$1F XPRAM $7C, $78 and $E0), $20-$26 the
-; time in BCD (seconds, minutes, hours, day of week, date, month, year - 1900),
-; $31 clock control.
 
 ; InstallRTCTraps
 ; Replace _InitUtil, _WriteParam, _ReadDateTime, _SetDateTime, _ReadXPRam and
@@ -1730,7 +1723,7 @@ KbdIntr:
             btst    #1,D0                           ; Waiting for a key packet's second byte?
             bne.w   KeyPacket
             bclr    #2,($68,A1)                     ; Left set when a key packet's second byte came late: drop this byte
-            beq.b   KbdFirstByte                      ; Otherwise it starts a key packet
+            beq.b   KbdFirstByte                    ; Otherwise it starts a key packet
             rts
 ; KbdFirstByte
 ; First byte of a key packet: key number and up/down, or status bits
@@ -1912,7 +1905,7 @@ KeyPacket:
             beq.b   .Translate
             bset    #7,D1
 .Translate:
-            bsr.b   KeyTransGlue                      ; Two character codes on the stack
+            bsr.b   KeyTransGlue                    ; Two character codes on the stack
             movea.l (OutboundGlobals).l,A1
             moveq   #0,D0
             move.w  (SP)+,D0                        ; First character
@@ -2239,7 +2232,7 @@ PostModKey:
             movem.l D0-D7,-(SP)
             move.b  D0,D6
             move.b  D1,D7
-            move.b  ModifierKeys(PC,D1.w),D0      ; Key code
+            move.b  ModifierKeys(PC,D1.w),D0        ; Key code
 .WithCode:
             btst    D1,($6A,A1)                     ; Bit set: down
             beq.b   .Update

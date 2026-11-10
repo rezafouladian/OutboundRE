@@ -322,7 +322,7 @@ SEPatch400050:
             btst    #HostMac,(OutboundCfg).l
             bne.b   .CheckSCSI
             move.b  #$F7,(VBase+vDIRB).l            ; VIA port B: $F7
-            move.b  #$F7,(VBase).l
+            move.b  #$F7,(VBase+vBufB).l
 .CheckSCSI:
             btst    #SCSIPresent,(OutboundCfg).l
             beq.b   .WhichCPU
@@ -639,7 +639,7 @@ PlusPatch4008A2:
             bsr.w   InstallRAMdDrvr                 ; Install .RAMd
             move.l  #10000000,D0
 .WaitATANotBusy:
-            cmpi.b  #$80,(ATAStatus).l
+            cmpi.b  #$80,(ATAStatus).l              ; ATA status: wait for BSY to clear
             bne.b   .ATATries
             subq.l  #1,D0
             bne.b   .WaitATANotBusy
@@ -647,14 +647,14 @@ PlusPatch4008A2:
             moveq   #$A,D0
 .CheckATAStatus:
             moveq   #-$13,D1
-            and.b   (ATAStatus).l,D1
+            and.b   (ATAStatus).l,D1                ; Status without IDX and DSC: DRDY only?
             cmpi.b  #$40,D1
             beq.b   .ATAFound
             subq.l  #1,D0
             bne.b   .CheckATAStatus
             bra.b   .ProbeDone
 .ATAFound:
-            bset    #HDPresent,(OutboundCfg2).l
+            bset    #HDPresent,(OutboundCfg2).l     ; Hard disk found
 .ProbeDone:
             move.l  (SP)+,LineAVector               ; Trace stub back
             lea     (VBase).l,A0
@@ -1077,7 +1077,7 @@ LineAHook:
             move.l  (SP)+,($48,SP)
             bra.b   .OtherTraps
 .ScreenRect:
-            dc.w    29,64,342+29,512+64            ; 512x342 at (64,29)
+            dc.w    29,64,342+29,512+64             ; 512x342 at (64,29)
 .OtherTraps:
             btst    #HostMac,(OutboundCfg).l
             bne.b   .SizeRsrc
@@ -1302,13 +1302,6 @@ OBScrnBitMap:
             move.w  #400,(A0)+                      ; bottom 400
             move.w  #640,(A0)                       ; right 640
             jmp     (A1)
-; Clock and parameter RAM (the same code is in Floppy_1.3.s and HardDisk_1.3.s). The
-; clock chip, which looks like a Motorola MC68HC68T1, is on VIA port B at
-; $E7E1FE: bit 0 data, bit 1 clock, bit 2 select (low while talking), MSB first.
-; A command byte is the register address, plus $80 to write. Registers: $00-$1F
-; RAM ($00-$13 the 20 PRAM bytes, $14-$1F XPRAM $7C, $78 and $E0), $20-$26 the
-; time in BCD (seconds, minutes, hours, day of week, date, month, year - 1900),
-; $31 clock control.
 
 ; InstallRTCTraps
 ; Replace _InitUtil, _WriteParam, _ReadDateTime, _SetDateTime, _ReadXPRam and
@@ -2411,7 +2404,7 @@ KbdVBLIntr:
             movea.l D0,A0
             jsr     (A0)
 .ContinueRom:
-            btst    #IsMacSEROM,(OutboundCfg).l                  ; Rest of the ROM's VBL handler: SE, then Plus
+            btst    #IsMacSEROM,(OutboundCfg).l     ; Rest of the ROM's VBL handler: SE, then Plus
             beq.b   .PlusRom
             jmp     (SE_VBLTasks).l
 .PlusRom:
@@ -2502,7 +2495,7 @@ DrawBootLogo:
 .DrawRun:
             move.b  (A0)+,D1                        ; Draw run
             add.b   D1,D3
-            beq.b   NextLogoPixel.Return                   ; 0 at a row start ends it
+            beq.b   NextLogoPixel.Return            ; 0 at a row start ends it
 .Toggle:
             bchg    D2,(A4)                         ; Toggle the pixel
             bsr.b   NextLogoPixel
@@ -2542,11 +2535,11 @@ BootLogoRLE:
 ; Copy a 32x32 icon from A1 to A0 and build its mask
 CopyIconMask:
             movem.l D0-D3,-(SP)
-            move.w  #$1F,D3
+            move.w  #32-1,D3
 .NextRow:
             move.l  (A1)+,D0
             moveq   #-1,D1
-            move.w  #$1F,D2
+            move.w  #32-1,D2
 .FromLeft:
             btst    D2,D0
             bne.b   .Right
@@ -2945,7 +2938,7 @@ RAMdXfer:
             clr.w   D3
             andi.b  #3,D2
             beq.b   .NextWindow
-            move.b  .UnitsPerMode(PC,D2.w),D3                 ; Skip the checksum block(s) at the start
+            move.b  .UnitsPerMode(PC,D2.w),D3       ; Skip the checksum block(s) at the start
             add.w   D3,(-$A,A6)
             bclr    #2,(-2,A6)
             move.w  #$200,D3                        ; Window size: 512 blocks, 1024 for a word lane
@@ -3465,7 +3458,7 @@ SizeRAMDisk:
 .Restore:
             bsr.w   SelectBank
             move.b  (0,A4,D0.w),D2
-            move.b  .LaneModes(PC,D2.w),D2                 ; Lane mask to modes (bits 4-5 low, 6-7 high, 0-3 units)
+            move.b  .LaneModes(PC,D2.w),D2          ; Lane mask to modes (bits 4-5 low, 6-7 high, 0-3 units)
             move.b  D2,(0,A4,D0.w)
             move.w  (SP)+,(A1)                      ; Restore the saved words
             move.w  (SP)+,(A0)
