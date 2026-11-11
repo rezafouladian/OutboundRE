@@ -1,4 +1,4 @@
-; Outbound Laptop Hard Disk EEPROM
+; Outbound Laptop Hard Disk EEPROM 1.3
 ;
 ; Rebuilds the original 11,868-byte image byte for byte with asmotor (motor68k).
 

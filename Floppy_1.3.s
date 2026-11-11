@@ -1,4 +1,4 @@
-; Outbound Laptop Floppy EEPROM
+; Outbound Laptop Floppy EEPROM 1.3
 ;
 ; Rebuilds the original 16,310-byte image byte for byte with asmotor (motor68k).
 
