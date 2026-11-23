@@ -49,11 +49,30 @@ jobs:
       - name: Assemble ROMs
         run: |
           export PATH="$PWD/asmotor-bin:$PATH"
+          mkdir -p out
           for src in HardDisk_1.3 Floppy_1.3 HardDisk_1.3_SCSIPatch Floppy_1.3_SCSIPatch; do
-            motor68k -mc0 -mpy -fb -z00 -o"${src}.bin" "${src}.s"
+            motor68k -mc0 -mpy -fb -z00 -o"out/${src}.bin" "${src}.s"
           done
+
+      # Pad each ROM to 16 KiB (2 x 8 KiB EEPROMs) with 0xFF, the erased state.
+      # 68000 is big-endian: even bytes go to the Hi chip (U40, D8-D15), odd bytes to Lo (U49, D0-D7).
+      - name: Pad and split into U40/U49 images
+        run: |
+          python3 - <<'EOF'
+          import pathlib, sys
+          ROM_SIZE = 16 * 1024
+          for rom in sorted(pathlib.Path("out").glob("*.bin")):
+              data = rom.read_bytes()
+              if len(data) > ROM_SIZE:
+                  sys.exit(f"{rom.name} is {len(data)} bytes, larger than {ROM_SIZE}")
+              data = data.ljust(ROM_SIZE, b"\xff")
+              rom.write_bytes(data)
+              rom.with_name(f"{rom.stem}_U40_Hi.bin").write_bytes(data[0::2])
+              rom.with_name(f"{rom.stem}_U49_Lo.bin").write_bytes(data[1::2])
+              print(f"{rom.name}: {len(data)} bytes -> U40 {len(data[0::2])}, U49 {len(data[1::2])}")
+          EOF
 
       - uses: actions/upload-artifact@v4
         with:
           name: roms
-          path: "*.bin"
+          path: out/
