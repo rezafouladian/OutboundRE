@@ -1,0 +1,59 @@
+name: Build ROMs
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  ASMOTOR_REPO: rezafouladian/asmotor
+  ASMOTOR_REF: mpw-rom-fixes
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Resolve the fork branch to a commit SHA so the cache invalidates when the fork changes.
+      - name: Resolve asmotor commit
+        id: asmotor
+        run: echo "sha=$(git ls-remote https://github.com/${ASMOTOR_REPO}.git refs/heads/${ASMOTOR_REF} | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache motor68k
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: asmotor-bin
+          key: motor68k-${{ runner.os }}-${{ steps.asmotor.outputs.sha }}
+
+      - name: Check out asmotor fork
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ASMOTOR_REPO }}
+          ref: ${{ steps.asmotor.outputs.sha }}
+          path: asmotor
+          submodules: recursive
+
+      - name: Build motor68k
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          cmake -S asmotor -B asmotor/build/cmake/release \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DASMOTOR_VERSION="$(cat asmotor/build/version)"
+          cmake --build asmotor/build/cmake/release --target motor68k -j
+          mkdir -p asmotor-bin
+          cp asmotor/build/cmake/release/xasm/680x0/motor68k asmotor-bin/
+
+      - name: Assemble ROMs
+        run: |
+          export PATH="$PWD/asmotor-bin:$PATH"
+          for src in HardDisk_1.3 Floppy_1.3 HardDisk_1.3_SCSIPatch Floppy_1.3_SCSIPatch; do
+            motor68k -mc0 -mpy -fb -z00 -o"${src}.bin" "${src}.s"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: roms
+          path: "*.bin"
