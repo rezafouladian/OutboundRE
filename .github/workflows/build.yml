@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       # Resolve the fork branch to a commit SHA so the cache invalidates when the fork changes.
       - name: Resolve asmotor commit
